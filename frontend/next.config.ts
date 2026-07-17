@@ -1,5 +1,11 @@
 import type { NextConfig } from 'next';
 
+const rawBackendUrl = process.env.BACKEND_URL?.trim();
+const backendUrl =
+  rawBackendUrl && /^https?:\/\//i.test(rawBackendUrl)
+    ? rawBackendUrl.replace(/\/+$/, '')
+    : 'http://localhost:3002';
+
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
@@ -8,7 +14,7 @@ const nextConfig: NextConfig = {
       beforeFiles: [
         {
           source: '/api/:path*',
-          destination: `${process.env.BACKEND_URL ?? 'http://localhost:3002'}/api/:path*`,
+          destination: `${backendUrl}/api/:path*`,
         },
       ],
     };
