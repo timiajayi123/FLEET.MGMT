@@ -1,0 +1,1 @@
+import{IsDateString,IsOptional,IsString,IsUUID,MaxLength}from'class-validator';export class CreateAllocationDto{@IsUUID()vehicleId!:string;@IsUUID()driverId!:string;@IsString()@MaxLength(1000)purpose!:string;@IsOptional()@IsString()destination?:string;@IsDateString()startAt!:string;@IsDateString()expectedEndAt!:string;@IsOptional()@IsString()notes?:string;}

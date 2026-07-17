@@ -1,0 +1,12 @@
+CREATE TABLE "driver_current_locations" ("id" UUID NOT NULL,"driverId" UUID NOT NULL,"vehicleId" UUID,"allocationId" UUID,"latitude" DOUBLE PRECISION NOT NULL,"longitude" DOUBLE PRECISION NOT NULL,"accuracy" DOUBLE PRECISION,"speed" DOUBLE PRECISION,"heading" DOUBLE PRECISION,"recordedAt" TIMESTAMPTZ(3) NOT NULL,"updatedAt" TIMESTAMPTZ(3) NOT NULL,CONSTRAINT "driver_current_locations_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "driver_current_locations_driverId_key" ON "driver_current_locations"("driverId");
+CREATE INDEX "driver_current_locations_recordedAt_idx" ON "driver_current_locations"("recordedAt");
+CREATE TABLE "driver_location_history" ("id" UUID NOT NULL,"driverId" UUID NOT NULL,"vehicleId" UUID,"allocationId" UUID,"latitude" DOUBLE PRECISION NOT NULL,"longitude" DOUBLE PRECISION NOT NULL,"accuracy" DOUBLE PRECISION,"speed" DOUBLE PRECISION,"heading" DOUBLE PRECISION,"recordedAt" TIMESTAMPTZ(3) NOT NULL,"createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "driver_location_history_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "driver_location_history_driverId_recordedAt_idx" ON "driver_location_history"("driverId","recordedAt");
+CREATE INDEX "driver_location_history_allocationId_recordedAt_idx" ON "driver_location_history"("allocationId","recordedAt");
+ALTER TABLE "driver_current_locations" ADD CONSTRAINT "driver_current_locations_driverId_fkey" FOREIGN KEY ("driverId") REFERENCES "drivers"("id") ON DELETE CASCADE;
+ALTER TABLE "driver_current_locations" ADD CONSTRAINT "driver_current_locations_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "vehicles"("id") ON DELETE SET NULL;
+ALTER TABLE "driver_current_locations" ADD CONSTRAINT "driver_current_locations_allocationId_fkey" FOREIGN KEY ("allocationId") REFERENCES "vehicle_allocations"("id") ON DELETE SET NULL;
+ALTER TABLE "driver_location_history" ADD CONSTRAINT "driver_location_history_driverId_fkey" FOREIGN KEY ("driverId") REFERENCES "drivers"("id") ON DELETE CASCADE;
+ALTER TABLE "driver_location_history" ADD CONSTRAINT "driver_location_history_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "vehicles"("id") ON DELETE SET NULL;
+ALTER TABLE "driver_location_history" ADD CONSTRAINT "driver_location_history_allocationId_fkey" FOREIGN KEY ("allocationId") REFERENCES "vehicle_allocations"("id") ON DELETE SET NULL;

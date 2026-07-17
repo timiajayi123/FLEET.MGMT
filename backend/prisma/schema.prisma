@@ -1,0 +1,382 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+enum VehicleRequestStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum RequestPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MasterDataStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  RESERVED
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ASSIGNED
+  ON_LEAVE
+  INACTIVE
+}
+
+enum AllocationStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Directorate {
+  id           String           @id @default(uuid()) @db.Uuid
+  code         String           @unique
+  name         String           @unique
+  description  String?
+  status       MasterDataStatus @default(ACTIVE)
+  sortOrder    Int              @default(0)
+  departments  Department[]
+  requests     VehicleRequest[]
+  users        User[]
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([status, sortOrder, name])
+  @@map("directorates")
+}
+
+model Department {
+  id            String           @id @default(uuid()) @db.Uuid
+  directorateId String           @db.Uuid
+  code          String           @unique
+  name          String
+  description   String?
+  status        MasterDataStatus @default(ACTIVE)
+  sortOrder     Int              @default(0)
+  directorate   Directorate      @relation(fields: [directorateId], references: [id], onDelete: Restrict)
+  units         Unit[]
+  requests      VehicleRequest[]
+  users         User[]
+  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([directorateId, name])
+  @@index([directorateId, status, sortOrder, name])
+  @@map("departments")
+}
+
+model Unit {
+  id           String           @id @default(uuid()) @db.Uuid
+  departmentId String           @db.Uuid
+  code         String           @unique
+  name         String
+  description  String?
+  status       MasterDataStatus @default(ACTIVE)
+  sortOrder    Int              @default(0)
+  department   Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  requests     VehicleRequest[]
+  users        User[]
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@unique([departmentId, name])
+  @@index([departmentId, status, sortOrder, name])
+  @@map("units")
+}
+
+model Location {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique
+  name        String           @unique
+  address     String?
+  state       String?
+  latitude    Float?
+  longitude   Float?
+  description String?
+  status      MasterDataStatus @default(ACTIVE)
+  sortOrder   Int              @default(0)
+  requests    VehicleRequest[]
+  users       User[]
+  vehicles    Vehicle[]
+  drivers     Driver[]
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([status, sortOrder, name])
+  @@map("locations")
+}
+
+model VehicleType {
+  id                String           @id @default(uuid()) @db.Uuid
+  code              String           @unique
+  name              String           @unique
+  description       String?
+  passengerCapacity Int?
+  status            MasterDataStatus @default(ACTIVE)
+  sortOrder         Int              @default(0)
+  requests          VehicleRequest[]
+  vehicles          Vehicle[]
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([status, sortOrder, name])
+  @@map("vehicle_types")
+}
+
+model Role {
+  id           String           @id @default(uuid()) @db.Uuid
+  code         String           @unique
+  name         String           @unique
+  description  String?
+  isSystemRole Boolean          @default(false)
+  status       MasterDataStatus @default(ACTIVE)
+  sortOrder    Int              @default(0)
+  createdAt    DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @db.Timestamptz(3)
+  users        User[]
+
+  @@index([status, sortOrder, name])
+  @@map("roles")
+}
+
+model User {
+  id            String       @id @default(uuid()) @db.Uuid
+  email         String       @unique
+  passwordHash  String
+  staffName     String
+  employeeId    String       @unique
+  phone         String?
+  passportMimeType String?
+  passportData  Bytes?
+  status        UserStatus   @default(ACTIVE)
+  roleId        String       @db.Uuid
+  locationId    String?      @db.Uuid
+  directorateId String?      @db.Uuid
+  departmentId  String?      @db.Uuid
+  unitId        String?      @db.Uuid
+  role          Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  location      Location?    @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  directorate   Directorate? @relation(fields: [directorateId], references: [id], onDelete: Restrict)
+  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  unit          Unit?        @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  sessions      Session[]
+  requests      VehicleRequest[]
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([status, staffName])
+  @@index([roleId])
+  @@map("users")
+}
+
+model Vehicle {
+  id                 String        @id @default(uuid()) @db.Uuid
+  registrationNumber String        @unique
+  serialNumber       String?
+  locationUser       String?
+  privateRegistrationNumber String?
+  officialRegistrationNumber String?
+  manufacturer       String
+  model              String
+  year               Int?
+  purchaseCost       String?
+  bookedValue        String?
+  estimatedCost      String?
+  reservedPresentValue String?
+  age                String?
+  serviceability     String?
+  legacyAgency       String?
+  chassisNumber      String?
+  engineNumber       String?
+  remark             String?
+  faultDescription   String?
+  color              String?
+  status             VehicleStatus @default(AVAILABLE)
+  locationId         String?       @db.Uuid
+  vehicleTypeId      String?       @db.Uuid
+  imageMimeType      String?
+  imageData          Bytes?
+  location           Location?     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  vehicleType        VehicleType?  @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  createdAt          DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime      @updatedAt @db.Timestamptz(3)
+  allocations        VehicleAllocation[]
+  currentLocations   DriverCurrentLocation[]
+  locationHistory    DriverLocationHistory[]
+
+  @@index([status, registrationNumber])
+  @@map("vehicles")
+}
+
+model Driver {
+  id               String       @id @default(uuid()) @db.Uuid
+  serialNumber     String?
+  staffName        String
+  employeeId       String       @unique
+  locationText     String?
+  zone             String?
+  category         String?
+  phone            String
+  email            String?
+  licenceNumber    String?      @unique
+  licenceClass     String?
+  licenceExpiry    DateTime?    @db.Date
+  status           DriverStatus @default(AVAILABLE)
+  locationId       String?      @db.Uuid
+  passportMimeType String?
+  passportData     Bytes?
+  location         Location?    @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+  allocations      VehicleAllocation[]
+  currentLocation  DriverCurrentLocation?
+  locationHistory  DriverLocationHistory[]
+  @@index([status, staffName])
+  @@map("drivers")
+}
+
+model VehicleAllocation {
+  id          String           @id @default(uuid()) @db.Uuid
+  vehicleId   String           @db.Uuid
+  driverId    String           @db.Uuid
+  purpose     String
+  destination String?
+  startAt     DateTime         @db.Timestamptz(3)
+  expectedEndAt DateTime       @db.Timestamptz(3)
+  actualEndAt DateTime?        @db.Timestamptz(3)
+  status      AllocationStatus @default(ACTIVE)
+  notes       String?
+  vehicle     Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver      Driver           @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+  currentLocations DriverCurrentLocation[]
+  locationHistory  DriverLocationHistory[]
+  @@index([status, startAt])
+  @@index([vehicleId, status])
+  @@index([driverId, status])
+  @@map("vehicle_allocations")
+}
+
+model DriverCurrentLocation {
+  id           String   @id @default(uuid()) @db.Uuid
+  driverId     String   @unique @db.Uuid
+  vehicleId    String?  @db.Uuid
+  allocationId String?  @db.Uuid
+  latitude     Float
+  longitude    Float
+  accuracy     Float?
+  speed        Float?
+  heading      Float?
+  recordedAt   DateTime @db.Timestamptz(3)
+  driver       Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  allocation   VehicleAllocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  @@index([recordedAt])
+  @@map("driver_current_locations")
+}
+
+model DriverLocationHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  driverId     String   @db.Uuid
+  vehicleId    String?  @db.Uuid
+  allocationId String?  @db.Uuid
+  latitude     Float
+  longitude    Float
+  accuracy     Float?
+  speed        Float?
+  heading      Float?
+  recordedAt   DateTime @db.Timestamptz(3)
+  driver       Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  allocation   VehicleAllocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  @@index([driverId, recordedAt])
+  @@index([allocationId, recordedAt])
+  @@map("driver_location_history")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  userId    String   @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model VehicleRequest {
+  id                     String               @id @default(uuid()) @db.Uuid
+  requestNumber          String               @unique
+  staffName              String
+  employeeId             String
+  locationId             String               @db.Uuid
+  directorateId          String               @db.Uuid
+  departmentId           String               @db.Uuid
+  unitId                 String               @db.Uuid
+  vehicleTypeId          String               @db.Uuid
+  requesterId            String?              @db.Uuid
+  location               String
+  directorate            String
+  department             String
+  unit                   String
+  purposeOfTrip          String
+  vehicleTypeName        String
+  destination            String
+  departureDate          DateTime             @db.Timestamptz(3)
+  expectedReturnDate     DateTime             @db.Timestamptz(3)
+  numberOfPassengers     Int
+  priority               RequestPriority
+  remarks                String?
+  attachmentFileName     String?
+  attachmentMimeType     String?
+  attachmentSizeBytes    Int?
+  attachmentData         Bytes?
+  status                 VehicleRequestStatus @default(PENDING_APPROVAL)
+  locationMaster         Location             @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  directorateMaster      Directorate          @relation(fields: [directorateId], references: [id], onDelete: Restrict)
+  departmentMaster       Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  unitMaster             Unit                 @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  vehicleTypeMaster      VehicleType          @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  requester              User?                @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+  createdAt              DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @db.Timestamptz(3)
+
+  @@index([status, departureDate])
+  @@index([employeeId, createdAt])
+  @@index([locationId])
+  @@index([directorateId])
+  @@index([departmentId])
+  @@index([unitId])
+  @@index([vehicleTypeId])
+  @@index([requesterId])
+  @@map("vehicle_requests")
+}

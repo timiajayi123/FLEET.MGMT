@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Mapped location pin</title>
+  <path fill="#168567" d="M32 2C20.1 2 10.5 11.6 10.5 23.5c0 16.1 19 36.6 19.8 37.5a2.3 2.3 0 0 0 3.4 0c.8-.9 19.8-21.4 19.8-37.5C53.5 11.6 43.9 2 32 2Z"/>
+  <path fill="#0f6f56" d="M32 2v59.7c.6 0 1.2-.2 1.7-.7.8-.9 19.8-21.4 19.8-37.5C53.5 11.6 43.9 2 32 2Z" opacity=".35"/>
+  <circle cx="32" cy="23.5" r="12.5" fill="#fff"/>
+  <circle cx="32" cy="23.5" r="6.5" fill="#168567"/>
+  <path fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2.4" d="M20 9.5c-4 3-6.5 7.8-6.5 14"/>
+</svg>
