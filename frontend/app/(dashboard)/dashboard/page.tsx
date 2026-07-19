@@ -117,10 +117,10 @@ function StaffDashboard({ data }: { data: DashboardData }) {
   }
 
   const latestRequest = data.myRequests?.[0] ?? null;
-  const readyRequests = (data.metrics.approvedRequests ?? 0) + (data.metrics.allocatedRequests ?? 0);
+  const approvedByFleet = (data.metrics.approvedRequests ?? 0) + (data.metrics.allocatedRequests ?? 0) + (data.metrics.completedRequests ?? 0);
   const metrics = [
     { label: 'My requests', value: data.metrics.totalRequests ?? 0, note: 'All transport requests submitted by you', icon: ClipboardList, tone: 'green' },
-    { label: 'Ready/approved', value: readyRequests, note: 'Approved by fleet admin', icon: CheckCircle2, tone: 'blue' },
+    { label: 'Approved by fleet', value: approvedByFleet, note: 'Approved, assigned, or completed', icon: CheckCircle2, tone: 'blue' },
     { label: 'Trips completed', value: data.metrics.completedRequests ?? 0, note: 'Completed transport trips', icon: Route, tone: 'purple' },
   ];
 
