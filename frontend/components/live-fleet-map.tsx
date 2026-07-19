@@ -3,6 +3,7 @@
 import { loadGoogleMaps, type GoogleMap, type GoogleMapsNamespace, type GoogleMarker } from '@/lib/google-maps';
 import { Crosshair, Expand, List, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, Search, Square } from 'lucide-react';
 import { io, type Socket } from 'socket.io-client';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Position = {
@@ -46,6 +47,7 @@ export function LiveFleetMap() {
   const [syncAt, setSyncAt] = useState<Date | null>(null);
   const [view, setView] = useState<'MAP' | 'LIST'>('MAP');
   const [selectedAllocation, setSelectedAllocation] = useState('');
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [simulationRunning, setSimulationRunning] = useState(false);
   const simulatorEnabled = process.env.NEXT_PUBLIC_ENABLE_GPS_SIMULATOR === 'true' && process.env.NODE_ENV !== 'production';
 
@@ -144,6 +146,7 @@ export function LiveFleetMap() {
         const currentMarker = marker;
         currentMarker.addListener('click', () => {
           const current = latestPositions.current.get(position.vehicleId) ?? position;
+          setSelectedVehicleId(current.vehicleId);
           info.current?.setContent(popup(current));
           info.current?.open({ anchor: currentMarker, map });
         });
@@ -215,6 +218,7 @@ export function LiveFleetMap() {
     stationary: positions.filter((p) => p.connectionStatus === 'STATIONARY').length,
     stale: positions.filter((p) => ['STALE', 'OFFLINE'].includes(p.connectionStatus)).length,
   };
+  const selectedPosition = visible.find((position) => position.vehicleId === selectedVehicleId) ?? visible[0];
 
   return (
     <div className="live-fleet-page">
@@ -254,8 +258,25 @@ export function LiveFleetMap() {
         <div ref={mapContainer} className="admin-live-map" />
         <aside className="fleet-vehicle-list">
           <header><strong>{visible.length} vehicles</strong><small>Last sync {syncAt ? syncAt.toLocaleTimeString() : '--'}</small></header>
+          {selectedPosition && (
+            <section className="admin-driver-detail">
+              <div>
+                <strong>{selectedPosition.driver.staffName}</strong>
+                <small>{selectedPosition.driver.employeeId} - {selectedPosition.driver.phone || 'No phone'}</small>
+              </div>
+              <AdminSpeedometer speedMetresPerSecond={selectedPosition.speed} />
+              <dl>
+                <div><dt>Vehicle</dt><dd>{selectedPosition.vehicle.registrationNumber}</dd></div>
+                <div><dt>Type</dt><dd>{vehicleIconLabel(vehicleIconKind(selectedPosition))}</dd></div>
+                <div><dt>Status</dt><dd>{selectedPosition.connectionStatus}</dd></div>
+                <div><dt>Accuracy</dt><dd>{selectedPosition.accuracy ? `${Math.round(selectedPosition.accuracy)} m` : '--'}</dd></div>
+                <div><dt>Destination</dt><dd>{selectedPosition.allocation.destination || 'No destination'}</dd></div>
+                <div><dt>Last update</dt><dd>{new Date(selectedPosition.recordedAt).toLocaleTimeString()}</dd></div>
+              </dl>
+            </section>
+          )}
           {visible.map((position) => (
-            <button key={position.vehicleId} onClick={() => { mapRef.current?.panTo({ lat: position.latitude, lng: position.longitude }); mapRef.current?.setZoom(17); }}>
+            <button className={selectedPosition?.vehicleId === position.vehicleId ? 'selected' : ''} key={position.vehicleId} onClick={() => { setSelectedVehicleId(position.vehicleId); mapRef.current?.panTo({ lat: position.latitude, lng: position.longitude }); mapRef.current?.setZoom(17); }}>
               <i style={{ background: color(position.connectionStatus) }} />
               <span>
                 <strong>{position.vehicle.registrationNumber}</strong>
@@ -340,6 +361,28 @@ function vehicleMarkerSvg(kind: VehicleIconKind, fill: string) {
       <circle cx="43" cy="40" r="4.5" fill="#111827" stroke="#ffffff" stroke-width="2"/>
     </g>
   </svg>`;
+}
+
+function AdminSpeedometer({ speedMetresPerSecond }: { speedMetresPerSecond?: number }) {
+  const speed = Math.max(0, Math.round((speedMetresPerSecond ?? 0) * 3.6));
+  const displayedSpeed = Math.min(speed, 180);
+  const angle = -180 + displayedSpeed;
+  const style = { '--speed-angle': `${angle}deg` } as CSSProperties;
+
+  return (
+    <div className="speedometer admin-speedometer" style={style} role="meter" aria-label={`Current speed ${speed} kilometres per hour`} aria-valuemin={0} aria-valuemax={180} aria-valuenow={speed}>
+      <div className="speedometer-face">
+        <span className="speed-mark mark-0">0</span>
+        <span className="speed-mark mark-60">60</span>
+        <span className="speed-mark mark-120">120</span>
+        <span className="speed-mark mark-180">180</span>
+        <i className="speed-needle" />
+        <i className="speed-hub" />
+        <div className="speed-readout"><strong>{speed}</strong><small>km/h</small></div>
+      </div>
+      <span className="speed-caption">DRIVER SPEED</span>
+    </div>
+  );
 }
 
 function popup(position: Position) {
