@@ -133,9 +133,11 @@ function StaffDashboard({ data }: { data: DashboardData }) {
           {latestRequest ? (
             <div className="driver-dashboard-assignment">
               <strong>{latestRequest.requestNumber}</strong>
-              <span>{latestRequest.destination}</span>
-              <small>{latestRequest.purposeOfTrip}</small>
-              {latestRequest.allocations[0] && <small>{latestRequest.allocations[0].vehicle.registrationNumber} · {latestRequest.allocations[0].driver.staffName}</small>}
+              <span>{staffStatusLabel(latestRequest.status)}</span>
+              <small>Destination: {latestRequest.destination}</small>
+              {['ALLOCATED', 'COMPLETED'].includes(latestRequest.status) && latestRequest.allocations[0] && (
+                <small>Vehicle: {latestRequest.allocations[0].vehicle.registrationNumber}</small>
+              )}
               <em>{staffStatusLabel(latestRequest.status)}</em>
             </div>
           ) : (
