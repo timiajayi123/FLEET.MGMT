@@ -18,7 +18,7 @@ import {
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { MasterDataResource, masterDataResources } from './master-data-config';
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/api').replace(/\/+$/, '');
+const API_URL = '/api';
 const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 type RecordItem = {
@@ -61,13 +61,15 @@ export function MasterDataAdmin({
 }) {
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [parents, setParents] = useState<RecordItem[]>([]);
+  const defaultSortBy = resource === 'locations' ? 'createdAt' : 'name';
+  const defaultSortOrder = resource === 'locations' ? 'desc' : 'asc';
   const [meta, setMeta] = useState<Meta>({
     page: 1,
-    limit: 10,
+    limit: resource === 'locations' ? 50 : 10,
     total: 0,
     totalPages: 0,
-    sortBy: 'name',
-    sortOrder: 'asc',
+    sortBy: defaultSortBy,
+    sortOrder: defaultSortOrder,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

@@ -8,7 +8,7 @@ type SubmissionState =
   | { type: 'success'; requestNumber: string }
   | { type: 'error'; message: string };
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/api').replace(/\/+$/, '');
+const API_URL = '/api';
 const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 export function VehicleRequestForm({ embedded = false }: { embedded?: boolean }) {
