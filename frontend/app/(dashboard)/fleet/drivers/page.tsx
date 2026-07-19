@@ -63,7 +63,37 @@ export default function DriversPage() {
     const response = await fetch(`/api/drivers/${driver.id}`, { method: 'DELETE' });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || 'Unable to delete driver.');
+      const message = Array.isArray(payload.message)
+        ? payload.message.join(' ')
+        : payload.message || 'Unable to delete driver.';
+      if (response.status === 409) {
+        const force = window.confirm(
+          `${message}\n\nDo you want to force delete this driver and remove their allocations, GPS records and trip history?`,
+        );
+        if (force) {
+          const deleteLinkedVehicles = window.confirm(
+            'Also delete the linked vehicle(s) assigned to this driver? Choose Cancel to keep the vehicle(s) and only remove this driver.',
+          );
+          const forced = await fetch(`/api/drivers/${driver.id}/force-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deleteLinkedVehicles }),
+          });
+          const forcedPayload = await forced.json().catch(() => ({}));
+          if (!forced.ok) {
+            setError(
+              Array.isArray(forcedPayload.message)
+                ? forcedPayload.message.join(' ')
+                : forcedPayload.message || 'Unable to force delete driver.',
+            );
+            return;
+          }
+          setError('');
+          await load();
+          return;
+        }
+      }
+      setError(message);
       return;
     }
     setError('');

@@ -1,10 +1,12 @@
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { VehicleStatus } from '../common/status.constants';
 
 const empty = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 const optionalNumber = ({ value }: { value: unknown }) =>
   value === '' || value === undefined || value === null ? undefined : Number(value);
+const optionalBoolean = ({ value }: { value: unknown }) =>
+  value === true || value === 'true' || value === '1';
 
 export class SaveVehicleDto {
   @IsOptional() @IsString() registrationNumber?: string;
@@ -38,4 +40,21 @@ export class BulkDeleteVehiclesDto {
   @ArrayMaxSize(1000)
   @IsUUID(undefined, { each: true })
   ids!: string[];
+
+  @Transform(optionalBoolean)
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
+
+  @Transform(optionalBoolean)
+  @IsOptional()
+  @IsBoolean()
+  deleteLinkedDrivers?: boolean;
+}
+
+export class ForceDeleteVehicleDto {
+  @Transform(optionalBoolean)
+  @IsOptional()
+  @IsBoolean()
+  deleteLinkedDrivers?: boolean;
 }

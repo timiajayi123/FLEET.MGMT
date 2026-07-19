@@ -121,10 +121,39 @@ export default function VehiclesPage() {
     const response = await fetch(`/api/vehicles/${vehicle.id}`, { method: 'DELETE' });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      const message = Array.isArray(payload.message)
+        ? payload.message.join(' ')
+        : payload.message || 'Unable to delete vehicle.';
+      if (response.status === 409) {
+        const force = window.confirm(
+          `${message}\n\nDo you want to force delete this vehicle and remove its allocations, GPS records and trip history?`,
+        );
+        if (force) {
+          const deleteLinkedDrivers = window.confirm(
+            'Also delete the linked driver(s) assigned to this vehicle? Choose Cancel to keep the driver(s) and only remove this vehicle.',
+          );
+          const forced = await fetch(`/api/vehicles/${vehicle.id}/force-delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deleteLinkedDrivers }),
+          });
+          const forcedPayload = await forced.json().catch(() => ({}));
+          if (!forced.ok) {
+            setError(
+              Array.isArray(forcedPayload.message)
+                ? forcedPayload.message.join(' ')
+                : forcedPayload.message || 'Unable to force delete vehicle.',
+            );
+            return;
+          }
+          setError('');
+          setSelectedIds((current) => current.filter((id) => id !== vehicle.id));
+          await load();
+          return;
+        }
+      }
       setError(
-        Array.isArray(payload.message)
-          ? payload.message.join(' ')
-          : payload.message || 'Unable to delete vehicle.',
+        message,
       );
       return;
     }
@@ -162,6 +191,40 @@ export default function VehiclesPage() {
     const blocked = payload.blocked?.length
       ? ` Blocked: ${payload.blocked.map((item: { label: string }) => item.label).join(', ')}.`
       : '';
+    if (payload.blocked?.length) {
+      const force = window.confirm(
+        `${blocked}\n\nForce delete the blocked vehicle(s) and remove their allocations, GPS records and trip history?`,
+      );
+      if (force) {
+        const deleteLinkedDrivers = window.confirm(
+          'Also delete linked driver(s) for those vehicle(s)? Choose Cancel to keep drivers and only remove the selected vehicles.',
+        );
+        const forced = await fetch('/api/vehicles/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ids: payload.blocked.map((item: { id: string }) => item.id),
+            force: true,
+            deleteLinkedDrivers,
+          }),
+        });
+        const forcedPayload = await forced.json().catch(() => ({}));
+        if (!forced.ok) {
+          setError(
+            Array.isArray(forcedPayload.message)
+              ? forcedPayload.message.join(' ')
+              : forcedPayload.message || 'Unable to force delete selected vehicles.',
+          );
+          return;
+        }
+        setError(
+          `Force deleted ${forcedPayload.summary?.deleted ?? 0} vehicle(s). Cleaned ${forcedPayload.cleaned?.allocations ?? 0} allocation(s), ${forcedPayload.cleaned?.trips ?? 0} trip(s), and GPS records.`,
+        );
+        setSelectedIds([]);
+        await load();
+        return;
+      }
+    }
     setError(
       blocked
         ? `Deleted ${payload.summary?.deleted ?? 0} vehicle(s).${blocked}`

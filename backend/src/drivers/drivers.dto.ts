@@ -1,8 +1,10 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { DriverStatus } from '../common/status.constants';
 
 const empty = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
+const optionalBoolean = ({ value }: { value: unknown }) =>
+  value === true || value === 'true' || value === '1';
 
 export class SaveDriverDto {
   @IsOptional() @IsString() serialNumber?: string;
@@ -17,4 +19,11 @@ export class SaveDriverDto {
   @IsOptional() @IsString() licenceClass?: string;
   @IsOptional() @IsEnum(DriverStatus) status?: DriverStatus;
   @Transform(empty) @IsOptional() @IsUUID() locationId?: string;
+}
+
+export class ForceDeleteDriverDto {
+  @Transform(optionalBoolean)
+  @IsOptional()
+  @IsBoolean()
+  deleteLinkedVehicles?: boolean;
 }

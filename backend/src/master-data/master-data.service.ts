@@ -146,33 +146,11 @@ export class MasterDataService {
     this.validateResourceFields(resource, dto);
     const data = this.commonData(dto);
     try {
-      switch (resource) {
-        case 'directorates':
-          return await this.prisma.directorate.create({ data });
-        case 'departments':
-          return await this.prisma.department.create({
-            data: { ...data, directorateId: dto.directorateId! },
-            include: { directorate: { select: { id: true, name: true, code: true } } },
-          });
-        case 'units':
-          return await this.prisma.unit.create({
-            data: { ...data, departmentId: dto.departmentId! },
-            include: { department: { select: { id: true, name: true, code: true } } },
-          });
-        case 'locations':
-          return await this.prisma.location.create({
-            data: { ...data, address: dto.address || null, state: dto.state || null },
-          });
-        case 'vehicle-types':
-          return await this.prisma.vehicleType.create({
-            data: { ...data, passengerCapacity: dto.passengerCapacity ?? null },
-          });
-        case 'roles':
-          return await this.prisma.role.create({
-            data: { ...data, isSystemRole: dto.isSystemRole ?? false },
-          });
-      }
+      return await this.createRecord(resource, dto, data);
     } catch (error) {
+      if (await this.prisma.recoverFromInvalidConnectionState(error)) {
+        return await this.createRecord(resource, dto, data);
+      }
       this.handlePrismaError(error);
     }
   }
@@ -307,6 +285,39 @@ export class MasterDataService {
       status: dto.status ?? MasterDataStatus.ACTIVE,
       sortOrder: dto.sortOrder ?? 0,
     };
+  }
+
+  private createRecord(
+    resource: MasterDataResource,
+    dto: SaveMasterDataDto,
+    data: ReturnType<MasterDataService['commonData']>,
+  ) {
+    switch (resource) {
+      case 'directorates':
+        return this.prisma.directorate.create({ data });
+      case 'departments':
+        return this.prisma.department.create({
+          data: { ...data, directorateId: dto.directorateId! },
+          include: { directorate: { select: { id: true, name: true, code: true } } },
+        });
+      case 'units':
+        return this.prisma.unit.create({
+          data: { ...data, departmentId: dto.departmentId! },
+          include: { department: { select: { id: true, name: true, code: true } } },
+        });
+      case 'locations':
+        return this.prisma.location.create({
+          data: { ...data, address: dto.address || null, state: dto.state || null },
+        });
+      case 'vehicle-types':
+        return this.prisma.vehicleType.create({
+          data: { ...data, passengerCapacity: dto.passengerCapacity ?? null },
+        });
+      case 'roles':
+        return this.prisma.role.create({
+          data: { ...data, isSystemRole: dto.isSystemRole ?? false },
+        });
+    }
   }
 
   private validateResourceFields(resource: MasterDataResource, dto: SaveMasterDataDto) {

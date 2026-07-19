@@ -17,4 +17,21 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
   }
+
+  async recoverFromInvalidConnectionState(error: unknown): Promise<boolean> {
+    if (!this.isInvalidConnectionState(error)) return false;
+    await this.$disconnect().catch(() => undefined);
+    await this.$connect();
+    return true;
+  }
+
+  private isInvalidConnectionState(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const candidate = error as { code?: unknown; message?: unknown };
+    return (
+      candidate.code === 'EINVALIDSTATE' ||
+      (typeof candidate.message === 'string' &&
+        candidate.message.includes('Requests can only be made in the LoggedIn state'))
+    );
+  }
 }

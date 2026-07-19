@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SaveVehicleDto } from './vehicles.dto';
+import { ForceDeleteVehicleDto, SaveVehicleDto } from './vehicles.dto';
 
 const select = {
   id: true,
@@ -88,8 +88,24 @@ export class VehiclesService {
       throw new ConflictException(`This vehicle cannot be deleted because it is attached to: ${blocks.join(', ')}.`);
     return this.prisma.vehicle.delete({ where: { id }, select });
   }
-  async bulkRemove(ids: string[]) {
+  async forceRemove(id: string, options: ForceDeleteVehicleDto = {}) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { id },
+      select: { id: true, registrationNumber: true },
+    });
+    if (!vehicle) throw new NotFoundException('Vehicle not found.');
+
+    return this.forceRemoveMany([id], { deleteLinkedDrivers: options.deleteLinkedDrivers });
+  }
+
+  async bulkRemove(
+    ids: string[],
+    options: { force?: boolean; deleteLinkedDrivers?: boolean } = {},
+  ) {
     const uniqueIds = [...new Set(ids)];
+    if (options.force) {
+      return this.forceRemoveMany(uniqueIds, { deleteLinkedDrivers: options.deleteLinkedDrivers });
+    }
     const deleted: string[] = [];
     const blocked: { id: string; label: string; reason: string }[] = [];
     const missing: string[] = [];
@@ -115,6 +131,118 @@ export class VehiclesService {
       }
     }
     return { deleted, blocked, missing, summary: { requested: uniqueIds.length, deleted: deleted.length, blocked: blocked.length, missing: missing.length } };
+  }
+
+  private async forceRemoveMany(
+    ids: string[],
+    options: { deleteLinkedDrivers?: boolean } = {},
+  ) {
+    const uniqueIds = [...new Set(ids)];
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, registrationNumber: true },
+    });
+    const vehicleIds = vehicles.map((vehicle) => vehicle.id);
+    const missing = uniqueIds.filter((id) => !vehicleIds.includes(id));
+    if (!vehicleIds.length) {
+      return {
+        deleted: [],
+        deletedLinkedDrivers: [],
+        missing,
+        cleaned: { allocations: 0, trips: 0, currentGps: 0, gpsHistory: 0, requestsReset: 0 },
+        summary: { requested: uniqueIds.length, deleted: 0, blocked: 0, missing: missing.length },
+      };
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const vehicleAllocations = await tx.vehicleAllocation.findMany({
+        where: { vehicleId: { in: vehicleIds } },
+        select: { id: true, driverId: true, requestId: true },
+      });
+      const linkedDriverIds = [...new Set(vehicleAllocations.map((allocation) => allocation.driverId).filter(Boolean))];
+      const driverIds = options.deleteLinkedDrivers ? linkedDriverIds : [];
+      const allocations = driverIds.length
+        ? await tx.vehicleAllocation.findMany({
+            where: this.allocationWhere(vehicleIds, driverIds),
+            select: { id: true, driverId: true, requestId: true },
+          })
+        : vehicleAllocations;
+      const allocationIds = allocations.map((allocation) => allocation.id);
+      const requestIds = [...new Set(allocations.map((allocation) => allocation.requestId).filter(Boolean) as string[])];
+
+      const tripWhere = this.tripWhere(vehicleIds, driverIds, allocationIds);
+      const trips = await tx.trip.findMany({
+        where: tripWhere,
+        select: { id: true },
+      });
+      const tripIds = trips.map((trip) => trip.id);
+
+      const history = await tx.driverLocationHistory.deleteMany({
+        where: this.dependentWhere(vehicleIds, driverIds, allocationIds, tripIds),
+      });
+      const currentGps = await tx.driverCurrentLocation.deleteMany({
+        where: this.dependentWhere(vehicleIds, driverIds, allocationIds, tripIds),
+      });
+      const deletedTrips = await tx.trip.deleteMany({ where: tripWhere });
+      const deletedAllocations = await tx.vehicleAllocation.deleteMany({
+        where: this.allocationWhere(vehicleIds, driverIds),
+      });
+      const requestsReset = requestIds.length
+        ? await tx.vehicleRequest.updateMany({
+            where: { id: { in: requestIds } },
+            data: { status: 'APPROVED' },
+          })
+        : { count: 0 };
+
+      if (!options.deleteLinkedDrivers && linkedDriverIds.length) {
+        await tx.driver.updateMany({ where: { id: { in: linkedDriverIds } }, data: { status: 'AVAILABLE' } });
+      }
+
+      const deletedVehicles = await tx.vehicle.deleteMany({ where: { id: { in: vehicleIds } } });
+      const deletedDrivers = driverIds.length
+        ? await tx.driver.deleteMany({ where: { id: { in: driverIds } } })
+        : { count: 0 };
+
+      return {
+        deleted: vehicleIds,
+        deletedLinkedDrivers: driverIds,
+        missing,
+        cleaned: {
+          allocations: deletedAllocations.count,
+          trips: deletedTrips.count,
+          currentGps: currentGps.count,
+          gpsHistory: history.count,
+          requestsReset: requestsReset.count,
+        },
+        summary: {
+          requested: uniqueIds.length,
+          deleted: deletedVehicles.count,
+          blocked: 0,
+          missing: missing.length,
+        },
+      };
+    });
+  }
+
+  private dependentWhere(vehicleIds: string[], driverIds: string[], allocationIds: string[], tripIds: string[]) {
+    const OR: object[] = [{ vehicleId: { in: vehicleIds } }];
+    if (driverIds.length) OR.push({ driverId: { in: driverIds } });
+    if (allocationIds.length) OR.push({ allocationId: { in: allocationIds } });
+    if (tripIds.length) OR.push({ tripId: { in: tripIds } });
+    return { OR };
+  }
+
+  private tripWhere(vehicleIds: string[], driverIds: string[], allocationIds: string[]) {
+    const OR: object[] = [{ vehicleId: { in: vehicleIds } }];
+    if (allocationIds.length) OR.push({ allocationId: { in: allocationIds } });
+    if (driverIds.length) OR.push({ driverId: { in: driverIds } });
+    return { OR };
+  }
+
+  private allocationWhere(vehicleIds: string[], driverIds: string[]) {
+    const OR: object[] = [{ vehicleId: { in: vehicleIds } }];
+    if (driverIds.length) OR.push({ driverId: { in: driverIds } });
+    return { OR };
   }
   async image(id: string) {
     const v = await this.prisma.vehicle.findUnique({ where: { id }, select: { imageData: true, imageMimeType: true } });
