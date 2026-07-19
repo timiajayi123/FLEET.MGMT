@@ -326,7 +326,7 @@ function ApprovalAllocationModal({
               }}
               options={allocations.map((allocation) => ({
                 id: allocation.id,
-                label: `${allocation.vehicle.registrationNumber} - ${allocation.driver.staffName} - ${allocation.destination || allocation.purpose}`,
+                label: `${allocation.vehicle.registrationNumber} - ${allocation.driver.staffName} - ${new Date(allocation.startAt).toLocaleString()} - ${allocation.id.slice(0, 8)}`,
               }))}
             />
             <Select
