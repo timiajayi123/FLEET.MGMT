@@ -1,23 +1,46 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   ParseFilePipeBuilder,
   Post,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { AuthService, SESSION_COOKIE } from '../auth/auth.service';
+import { AuthService } from '../auth/auth.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateVehicleRequestDto } from './dto/create-vehicle-request.dto';
 import { VehicleRequestsService } from './vehicle-requests.service';
+import { FLEET_MANAGER_ROLES, requireUser } from '../common/request-auth';
 
 @Controller('vehicle-requests')
 export class VehicleRequestsController {
   constructor(private readonly vehicleRequestsService: VehicleRequestsService, private readonly auth: AuthService) {}
+
+  @Get()
+  async list(@Req() req: Request) {
+    const user = await requireUser(this.auth, req);
+    return { data: await this.vehicleRequestsService.list(user) };
+  }
+
+  @Patch(':id/approve')
+  async approve(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]);
+    return { data: await this.vehicleRequestsService.setStatus(id, 'APPROVED') };
+  }
+
+  @Patch(':id/reject')
+  async reject(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
+    await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]);
+    return { data: await this.vehicleRequestsService.setStatus(id, 'REJECTED') };
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -32,8 +55,7 @@ export class VehicleRequestsController {
     )
     attachment?: Express.Multer.File,
   ) {
-    const token = req.headers.cookie?.split(';').map((value) => value.trim()).find((value) => value.startsWith(`${SESSION_COOKIE}=`))?.split('=')[1];
-    const user = await this.auth.fromToken(token);
-    return this.vehicleRequestsService.create(dto, attachment, user?.id);
+    const user = await requireUser(this.auth, req);
+    return this.vehicleRequestsService.create(dto, attachment, user.id);
   }
 }

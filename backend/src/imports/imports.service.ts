@@ -41,7 +41,8 @@ export class ImportsService {
             sortOrder: Number(row.sortOrder || 0),
           },
         });
-        exists ? out.updated++ : out.created++;
+        if (exists) out.updated++;
+        else out.created++;
       } catch (e) {
         out.failed++;
         out.errors.push({ row: index + 2, message: e instanceof Error ? e.message : 'Import failed' });
@@ -93,7 +94,7 @@ export class ImportsService {
           remark: vehicle.remark,
           faultDescription: vehicle.faultDescription,
           color: vehicle.color,
-          status: (vehicle.status || 'AVAILABLE') as any,
+          status: vehicle.status || 'AVAILABLE',
           locationId: location?.id || null,
           vehicleTypeId: type?.id || null,
         };
@@ -102,7 +103,8 @@ export class ImportsService {
           create: { registrationNumber: key, ...data },
           update: data,
         });
-        exists ? out.updated++ : out.created++;
+        if (exists) out.updated++;
+        else out.created++;
       } catch (e) {
         out.failed++;
         out.errors.push({ row: index + 2, message: e instanceof Error ? e.message : 'Import failed' });
@@ -151,7 +153,7 @@ export class ImportsService {
           email: driver.email,
           licenceNumber: driver.licenceNumber,
           licenceClass: driver.licenceClass,
-          status: (driver.status || 'AVAILABLE') as any,
+          status: driver.status || 'AVAILABLE',
           locationId: location?.id || null,
         };
         await this.prisma.driver.upsert({
@@ -159,7 +161,8 @@ export class ImportsService {
           create: { employeeId: driver.employeeId, ...data },
           update: data,
         });
-        exists ? out.updated++ : out.created++;
+        if (exists) out.updated++;
+        else out.created++;
       } catch (e) {
         out.failed++;
         out.errors.push({ row: index + 2, message: e instanceof Error ? e.message : 'Import failed' });
@@ -174,7 +177,7 @@ export class ImportsService {
     return (
       (await this.prisma.location.findUnique({ where: { code: text.toUpperCase() } })) ||
       (await this.prisma.location.findFirst({
-        where: { name: { equals: text, mode: 'insensitive' } },
+        where: { name: { equals: text } },
       }))
     );
   }

@@ -1,1 +1,7 @@
-import{Module}from'@nestjs/common';import{AuthModule}from'../auth/auth.module';import{GpsController}from'./gps.controller';import{GpsService}from'./gps.service';@Module({imports:[AuthModule],controllers:[GpsController],providers:[GpsService]})export class GpsModule{}
+import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { TrackingModule } from '../tracking/tracking.module';
+import { GpsController } from './gps.controller';
+
+@Module({ imports: [AuthModule, TrackingModule], controllers: [GpsController] })
+export class GpsModule {}

@@ -1,6 +1,6 @@
 # Fleet Management System
 
-Production-oriented npm workspaces monorepo scaffold for a Fleet Management System. It contains a Next.js frontend, a NestJS API, PostgreSQL with Prisma ORM, shared development tooling, and Docker support. Business features are intentionally not implemented yet.
+Production-oriented npm workspaces monorepo for a Fleet Management System. It contains a Next.js frontend, a NestJS API, Microsoft SQL Server with Prisma ORM, shared development tooling, and Docker support.
 
 ## Structure
 
@@ -14,14 +14,15 @@ docs/      Architecture and project documentation
 
 - Node.js 22 or newer
 - npm 10 or newer
-- Docker with Docker Compose (for the containerized workflow)
+- Local Microsoft SQL Server listening on `localhost:1433`
+- Docker with Docker Compose (optional, for the containerized app workflow)
 
 ## Local development
 
 1. Copy `backend/.env.example` to `backend/.env`.
-2. Start PostgreSQL with `docker compose up postgres -d`.
+2. Set `DATABASE_URL` in `backend/.env` for the local SQL Server `fleet_management` database.
 3. Generate the Prisma client with `npm run db:generate`.
-4. Apply the database migration with `npm run db:migrate`.
+4. Apply the SQL Server schema only after review/approval with Prisma.
 5. Start both applications with `npm run dev`.
 
 The frontend is available at `http://localhost:3000` and the API at `http://localhost:3001`.

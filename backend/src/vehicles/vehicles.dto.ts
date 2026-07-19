@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
-import { VehicleStatus } from '../../generated/prisma/enums';
+import { VehicleStatus } from '../common/status.constants';
 
 const empty = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 const optionalNumber = ({ value }: { value: unknown }) =>

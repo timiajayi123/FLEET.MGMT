@@ -4,7 +4,7 @@ const rawBackendUrl = process.env.BACKEND_URL?.trim();
 const backendUrl =
   rawBackendUrl && /^https?:\/\//i.test(rawBackendUrl)
     ? rawBackendUrl.replace(/\/+$/, '')
-    : 'http://localhost:3002';
+    : 'http://backend:3001';
 
 const nextConfig: NextConfig = {
   output: 'standalone',

@@ -1,0 +1,45 @@
+name: Azure Backend Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/azure-backend.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE_NAME: fleet-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name "${{ secrets.ACR_NAME }}"
+
+      - name: Build and push backend image
+        run: |
+          docker build -f backend/Dockerfile -t "${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${{ github.sha }}" .
+          docker push "${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${{ github.sha }}"
+
+      - name: Deploy backend container app
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_BACKEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${{ github.sha }}"

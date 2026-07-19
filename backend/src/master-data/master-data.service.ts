@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import { MasterDataStatus } from '../../generated/prisma/enums';
+import { MasterDataStatus } from '../common/status.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { MasterDataQueryDto, SaveMasterDataDto } from './dto/master-data.dto';
 import { isMasterDataResource, MasterDataResource } from './master-data.types';
@@ -34,9 +34,9 @@ export class MasterDataService {
       ...(query.search
         ? {
             OR: [
-              { name: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
-              { code: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
-              { description: { contains: query.search, mode: Prisma.QueryMode.insensitive } },
+              { name: { contains: query.search } },
+              { code: { contains: query.search } },
+              { description: { contains: query.search } },
             ],
           }
         : {}),

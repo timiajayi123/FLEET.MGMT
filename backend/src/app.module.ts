@@ -12,6 +12,8 @@ import { AllocationsModule } from './allocations/allocations.module';
 import { ImportsModule } from './imports/imports.module';
 import { GpsModule } from './gps/gps.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
+import { TrackingModule } from './tracking/tracking.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { GeocodingModule } from './geocoding/geocoding.module';
     ImportsModule,
     GpsModule,
     GeocodingModule,
+    TrackingModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sidebar-user">
-          {user?.passportMimeType ? <img className="avatar" src={`/api/users/${user.id}/passport`} alt="" /> : <div className="avatar">{initials}</div>}
+          {user?.passportMimeType ? <Image unoptimized width={48} height={48} className="avatar" src={`/api/users/${user.id}/passport`} alt="" /> : <div className="avatar">{initials}</div>}
           <div>
             <strong>{user?.staffName ?? 'Guest user'}</strong>
             <span>{user?.role.name ?? 'Not signed in'}</span>
@@ -139,7 +139,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 }}
                 aria-expanded={profileOpen}
               >
-                {user?.passportMimeType ? <img className="avatar small" src={`/api/users/${user.id}/passport`} alt="" /> : <span className="avatar small">{initials}</span>}
+                {user?.passportMimeType ? <Image unoptimized width={36} height={36} className="avatar small" src={`/api/users/${user.id}/passport`} alt="" /> : <span className="avatar small">{initials}</span>}
                 <span className="profile-copy">
                   <strong>{user?.staffName ?? 'Guest user'}</strong>
                   <small>{user?.role.name ?? 'Not signed in'}</small>

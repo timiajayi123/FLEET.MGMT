@@ -26,7 +26,7 @@ Dashboard metrics and most reports should be calculated from operational records
 - Separate a vehicle request from its approval, allocation, and actual trip.
 - Treat roles as many-to-many assignments rather than one role column on a user.
 - Keep telemetry append-only and partition it by observation time when volume requires it.
-- Store files in object storage; persist only metadata and storage references in PostgreSQL.
+- Store files in object storage; persist only metadata and storage references in SQL Server.
 
 ## 3. Entity catalog
 
@@ -190,7 +190,7 @@ erDiagram
 
 - Every mutable entity has `createdAt`, `updatedAt`, and where appropriate `createdByUserId` and `updatedByUserId`.
 - Master data uses a controlled status such as `ACTIVE`, `INACTIVE`, or `RETIRED`; transaction entities use explicit lifecycle states.
-- Case-insensitive business identifiers should use PostgreSQL `citext` or unique indexes on `lower(value)`.
+- Case-insensitive business identifiers should use SQL Server case-insensitive collation or computed normalized columns where stricter behavior is needed.
 - Monetary values use one configured currency per transaction or include a required ISO 4217 `currencyCode`.
 
 ### Required uniqueness
@@ -233,7 +233,7 @@ erDiagram
 
 ### Exclusion and partial unique constraints
 
-PostgreSQL exclusion constraints should prevent overlapping time ranges for:
+Application/service-layer checks or SQL Server constraints should prevent overlapping time ranges for:
 
 - Active vehicle allocations by `vehicleId`
 - Active driver allocations by `driverId`
@@ -251,7 +251,7 @@ Partial unique indexes should enforce only one current assignment or active reco
 
 ## 8. Status domains
 
-Status values should be implemented as controlled PostgreSQL/Prisma enums or reference tables after lifecycle review.
+Status values should be implemented as controlled application constants, SQL Server check constraints, or reference tables after lifecycle review.
 
 - User: `INVITED`, `ACTIVE`, `SUSPENDED`, `DEACTIVATED`
 - Vehicle: `AVAILABLE`, `RESERVED`, `IN_USE`, `MAINTENANCE`, `OUT_OF_SERVICE`, `RETIRED`

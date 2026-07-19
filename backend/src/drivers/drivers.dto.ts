@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
-import { DriverStatus } from '../../generated/prisma/enums';
+import { DriverStatus } from '../common/status.constants';
 
 const empty = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 

@@ -1,0 +1,52 @@
+name: Azure Frontend Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/azure-frontend.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE_NAME: fleet-frontend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name "${{ secrets.ACR_NAME }}"
+
+      - name: Build and push frontend image
+        run: |
+          docker build \
+            -f frontend/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=/api \
+            --build-arg NEXT_PUBLIC_SOCKET_URL=/ \
+            --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}" \
+            --build-arg NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID="${{ vars.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID }}" \
+            --build-arg NEXT_PUBLIC_ENABLE_GPS_SIMULATOR=false \
+            -t "${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${{ github.sha }}" .
+          docker push "${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${{ github.sha }}"
+
+      - name: Deploy frontend container app
+        run: |
+          az containerapp update \
+            --name "${{ secrets.AZURE_FRONTEND_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/${IMAGE_NAME}:${{ github.sha }}"

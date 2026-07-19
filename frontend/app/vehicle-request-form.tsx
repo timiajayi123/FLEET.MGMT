@@ -8,7 +8,8 @@ type SubmissionState =
   | { type: 'success'; requestNumber: string }
   | { type: 'error'; message: string };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/api').replace(/\/+$/, '');
+const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 export function VehicleRequestForm({ embedded = false }: { embedded?: boolean }) {
   const [state, setState] = useState<SubmissionState>({ type: 'idle' });
@@ -61,7 +62,7 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
     setState({ type: 'submitting' });
 
     try {
-      const response = await fetch(`${API_URL}/api/vehicle-requests`, {
+      const response = await fetch(apiPath('/vehicle-requests'), {
         method: 'POST',
         body: formData,
       });
@@ -279,7 +280,7 @@ function useMasterOptions(resource: string, parentId?: string, enabled = true) {
     });
     if (parentId)
       query.set(resource === 'departments' ? 'directorateId' : 'departmentId', parentId);
-    fetch(`${API_URL}/api/${resource}?${query}`, { signal: controller.signal })
+    fetch(apiPath(`/${resource}?${query}`), { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error('Unable to load options.');
         return response.json() as Promise<{ data?: MasterOption[] }>;

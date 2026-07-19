@@ -1,1 +1,19 @@
-import{Body,Controller,Get,Post,Req,UnauthorizedException}from'@nestjs/common';import type{Request}from'express';import{AuthService,SESSION_COOKIE}from'../auth/auth.service';import{LocationUpdateDto}from'./gps.dto';import{GpsService}from'./gps.service';function token(req:Request){return req.headers.cookie?.split(';').map(v=>v.trim()).find(v=>v.startsWith(`${SESSION_COOKIE}=`))?.split('=')[1]}@Controller('gps')export class GpsController{constructor(private gps:GpsService,private auth:AuthService){}private async user(req:Request){const user=await this.auth.fromToken(token(req));if(!user)throw new UnauthorizedException('Authentication required.');return user}@Post('location')async update(@Req()req:Request,@Body()dto:LocationUpdateDto){const user=await this.user(req);return this.gps.update(user.employeeId,dto)}@Get('live')async live(@Req()req:Request){await this.user(req);return this.gps.live()}}
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import type { Request } from 'express';
+import { AuthService } from '../auth/auth.service';
+import { requireUser, TRACKING_VIEW_ROLES } from '../common/request-auth';
+import { TrackingService } from '../tracking/tracking.service';
+import { LocationUpdateDto } from './gps.dto';
+
+@Controller('gps')
+export class GpsController {
+  constructor(private readonly tracking: TrackingService, private readonly auth: AuthService) {}
+  @Post('location') async update(@Req() req: Request, @Body() dto: LocationUpdateDto) {
+    return this.tracking.save(await requireUser(this.auth, req), { ...dto, clientEventId: randomUUID() });
+  }
+  @Get('live') async live(@Req() req: Request) {
+    await requireUser(this.auth, req, [...TRACKING_VIEW_ROLES]);
+    return this.tracking.live();
+  }
+}

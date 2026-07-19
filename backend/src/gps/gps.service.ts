@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocationUpdateDto } from './gps.dto';
+import { randomUUID } from 'node:crypto';
 @Injectable()
 export class GpsService {
   constructor(private prisma: PrismaService) {}
@@ -41,7 +42,7 @@ export class GpsService {
         create: data,
         update: data,
       }),
-      this.prisma.driverLocationHistory.create({ data }),
+      this.prisma.driverLocationHistory.create({ data: { ...data, clientEventId: randomUUID() } }),
     ]);
     return { success: true, driverId: driver.id, allocationId: allocation?.id ?? null };
   }

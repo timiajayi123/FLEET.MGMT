@@ -18,7 +18,8 @@ import {
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { MasterDataResource, masterDataResources } from './master-data-config';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '/api').replace(/\/+$/, '');
+const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
 type RecordItem = {
   id: string;
@@ -91,7 +92,7 @@ export function MasterDataAdmin({
       });
       if (search) query.set('search', search);
       if (status) query.set('status', status);
-      const response = await fetch(`${API_URL}/api/${resource}?${query}`, { cache: 'no-store' });
+      const response = await fetch(apiPath(`/${resource}?${query}`), { cache: 'no-store' });
       const payload = (await response.json()) as {
         data?: RecordItem[];
         meta?: Meta;
@@ -115,7 +116,7 @@ export function MasterDataAdmin({
   useEffect(() => {
     if (!('parentResource' in config)) return;
     fetch(
-      `${API_URL}/api/${config.parentResource}?status=ACTIVE&limit=100&sortBy=name&sortOrder=asc`,
+      apiPath(`/${config.parentResource}?status=ACTIVE&limit=100&sortBy=name&sortOrder=asc`),
       { cache: 'no-store' },
     )
       .then((response) => response.json())
@@ -156,7 +157,7 @@ export function MasterDataAdmin({
     setError('');
     try {
       const response = await fetch(
-        `${API_URL}/api/${resource}${modal === 'edit' && selected ? `/${selected.id}` : ''}`,
+        apiPath(`/${resource}${modal === 'edit' && selected ? `/${selected.id}` : ''}`),
         {
           method: modal === 'edit' ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -181,7 +182,7 @@ export function MasterDataAdmin({
     setSaving(true);
     setError('');
     try {
-      const response = await fetch(`${API_URL}/api/${resource}/${selected.id}`, {
+      const response = await fetch(apiPath(`/${resource}/${selected.id}`), {
         method: 'DELETE',
       });
       const payload = (await response.json()) as { message?: string | string[] };

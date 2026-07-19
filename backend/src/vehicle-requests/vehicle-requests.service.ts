@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { MasterDataStatus } from '../../generated/prisma/enums';
+import { MasterDataStatus } from '../common/status.constants';
 import { CreateVehicleRequestDto } from './dto/create-vehicle-request.dto';
 
 const ALLOWED_ATTACHMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
@@ -9,6 +9,27 @@ const ALLOWED_ATTACHMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'imag
 @Injectable()
 export class VehicleRequestsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  list(user: { id: string; role: { code: string } }) {
+    return this.prisma.vehicleRequest.findMany({
+      where: ['S_ADMIN', 'FM'].includes(user.role.code) ? undefined : { requesterId: user.id },
+      include: {
+        requester: { select: { id: true, staffName: true, email: true, phone: true } },
+        allocations: { select: { id: true, status: true, vehicleId: true, driverId: true } },
+      },
+      omit: { attachmentData: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async setStatus(id: string, status: 'APPROVED' | 'REJECTED') {
+    const request = await this.prisma.vehicleRequest.findUnique({ where: { id } });
+    if (!request) throw new BadRequestException('Vehicle request not found.');
+    if (!['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status)) {
+      throw new BadRequestException('An allocated or completed request cannot be changed.');
+    }
+    return this.prisma.vehicleRequest.update({ where: { id }, data: { status }, omit: { attachmentData: true } });
+  }
 
   async create(dto: CreateVehicleRequestDto, attachment?: Express.Multer.File, requesterId?: string) {
     const departureDate = new Date(dto.departureDate);

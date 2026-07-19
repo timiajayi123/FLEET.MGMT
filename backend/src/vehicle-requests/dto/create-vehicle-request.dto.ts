@@ -12,7 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { RequestPriority } from '../../../generated/prisma/enums';
+import { RequestPriority } from '../../common/status.constants';
 
 const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;

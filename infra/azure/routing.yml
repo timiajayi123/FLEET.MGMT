@@ -1,0 +1,19 @@
+rules:
+  - description: Backend REST API
+    routes:
+      - match:
+          prefix: /api
+    targets:
+      - containerApp: fleet-backend
+  - description: Backend Socket.IO
+    routes:
+      - match:
+          prefix: /socket.io
+    targets:
+      - containerApp: fleet-backend
+  - description: Frontend
+    routes:
+      - match:
+          prefix: /
+    targets:
+      - containerApp: fleet-frontend

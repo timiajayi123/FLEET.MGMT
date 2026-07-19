@@ -7,8 +7,8 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 type Vehicle = { id: string; registrationNumber: string; manufacturer: string; model: string; status: string };
 type Driver = { id: string; staffName: string; employeeId: string; status: string };
-type Location = { id: string; name: string; code: string };
 type CurrentUser = { employeeId: string; role: { code: string; name: string } };
+type VehicleRequest = { id: string; requestNumber: string; staffName: string; purposeOfTrip: string; destination: string; departureDate: string; expectedReturnDate: string; status: string };
 type Allocation = {
   id: string;
   purpose: string;
@@ -17,6 +17,7 @@ type Allocation = {
   expectedEndAt: string;
   notes?: string;
   status: string;
+  request?: VehicleRequest;
   vehicle: Vehicle;
   driver: Driver;
 };
@@ -26,26 +27,24 @@ export default function AllocationPage() {
   const [items, setItems] = useState<Allocation[]>([]),
     [vehicles, setVehicles] = useState<Vehicle[]>([]),
     [drivers, setDrivers] = useState<Driver[]>([]),
-    [locations, setLocations] = useState<Location[]>([]),
+    [requests, setRequests] = useState<VehicleRequest[]>([]),
     [currentUser, setCurrentUser] = useState<CurrentUser | null>(null),
     [mode, setMode] = useState<Mode | null>(null),
     [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    const [mePayload, allocations, vehiclePayload, driverPayload, locationPayload] = await Promise.all([
+    const [mePayload, allocations, vehiclePayload, driverPayload, requestPayload] = await Promise.all([
       fetch('/api/auth/me').then((r) => (r.ok ? readApiJson<{ user?: CurrentUser }>(r) : null)),
       fetch('/api/vehicle-allocations').then((r) => readApiJson<{ data?: Allocation[] }>(r)),
       fetch('/api/vehicles').then((r) => readApiJson<{ data?: Vehicle[] }>(r)),
       fetch('/api/drivers').then((r) => readApiJson<{ data?: Driver[] }>(r)),
-      fetch('/api/locations?activeOnly=true&limit=100&sortBy=name&sortOrder=asc').then((r) =>
-        readApiJson<{ data?: Location[] }>(r),
-      ),
+      fetch('/api/vehicle-requests').then((r) => readApiJson<{ data?: VehicleRequest[] }>(r)),
     ]);
     setCurrentUser(mePayload?.user ?? null);
     setItems(allocations.data || []);
     setVehicles(vehiclePayload.data || []);
     setDrivers(driverPayload.data || []);
-    setLocations(locationPayload.data || []);
+    setRequests(requestPayload.data || []);
   }, []);
 
   useEffect(() => {
@@ -77,6 +76,13 @@ export default function AllocationPage() {
   async function complete(id: string) {
     await fetch(`/api/vehicle-allocations/${id}/complete`, { method: 'PATCH' });
     await load();
+  }
+
+  async function setRequestStatus(id: string, action: 'approve' | 'reject') {
+    const response = await fetch(`/api/vehicle-requests/${id}/${action}`, { method: 'PATCH' });
+    const payload = await readApiJson(response, `Unable to ${action} request.`);
+    if (!response.ok) setError(apiMessage(payload.message, `Unable to ${action} request.`));
+    else await load();
   }
 
   async function deleteAllocation(allocation: Allocation) {
@@ -118,6 +124,14 @@ export default function AllocationPage() {
         }
       />
       {error && <div className="master-alert">{error}</div>}
+      {canManageAllocations && requests.some((request) => request.status === 'PENDING_APPROVAL') && (
+        <section className="master-panel allocation-request-queue">
+          <header><div><strong>Requests awaiting approval</strong><small>Approve a valid request before assigning a vehicle and driver.</small></div></header>
+          {requests.filter((request) => request.status === 'PENDING_APPROVAL').map((request) => (
+            <article key={request.id}><div><strong>{request.requestNumber} · {request.staffName}</strong><small>{request.purposeOfTrip} · {request.destination}</small></div><span>{new Date(request.departureDate).toLocaleString()}</span><div><button className="secondary-action" onClick={() => void setRequestStatus(request.id, 'reject')}>Reject</button><button className="primary-action" onClick={() => void setRequestStatus(request.id, 'approve')}>Approve</button></div></article>
+          ))}
+        </section>
+      )}
       <section className="master-panel">
         <div className="master-table-wrap">
           <table className="master-table">
@@ -202,7 +216,7 @@ export default function AllocationPage() {
           mode={mode}
           vehicles={vehicles}
           drivers={drivers}
-          locations={locations}
+          requests={requests.filter((request) => ['APPROVED', 'ALLOCATED'].includes(request.status) || request.id === mode.allocation?.request?.id)}
           onClose={() => setMode(null)}
           onSubmit={(event) => void save(event)}
         />
@@ -215,14 +229,14 @@ function AllocationModal({
   mode,
   vehicles,
   drivers,
-  locations,
+  requests,
   onClose,
   onSubmit,
 }: {
   mode: Mode;
   vehicles: Vehicle[];
   drivers: Driver[];
-  locations: Location[];
+  requests: VehicleRequest[];
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -246,6 +260,13 @@ function AllocationModal({
         <form onSubmit={onSubmit}>
           <div className="master-form-grid">
             <Select
+              name="requestId"
+              label="Approved vehicle request"
+              placeholder="Select approved request"
+              value={allocation?.request?.id}
+              options={requests.map((request) => ({ id: request.id, label: `${request.requestNumber} - ${request.staffName} - ${request.destination}` }))}
+            />
+            <Select
               name="vehicleId"
               label="Vehicle"
               placeholder="Select available vehicle"
@@ -263,17 +284,6 @@ function AllocationModal({
               options={driverOptions.map((driver) => ({
                 id: driver.id,
                 label: `${driver.staffName} (${driver.employeeId})`,
-              }))}
-            />
-            <Field name="purpose" label="Purpose" value={allocation?.purpose} />
-            <Select
-              name="destination"
-              label="Destination"
-              placeholder="Select registered location"
-              value={allocation?.destination}
-              options={locations.map((location) => ({
-                id: location.name,
-                label: `${location.name} (${location.code})`,
               }))}
             />
             <Field

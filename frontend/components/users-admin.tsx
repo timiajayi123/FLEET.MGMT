@@ -35,18 +35,21 @@ export function UsersAdmin() {
   }, []);
 
   useEffect(() => {
-    void load().catch((loadError) =>
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load users.'),
-    );
-    Promise.all(
-      resources.map(async (resource) => {
-        const response = await fetch(`/api/${resource}?activeOnly=true&limit=100`);
-        const payload = await response.json().catch(() => ({}));
-        return [resource, payload.data || []] as const;
-      }),
-    )
-      .then((entries) => setOptions(Object.fromEntries(entries)))
-      .catch(() => setError('Unable to load form options.'));
+    const timer = window.setTimeout(() => {
+      void load().catch((loadError) =>
+        setError(loadError instanceof Error ? loadError.message : 'Unable to load users.'),
+      );
+      void Promise.all(
+        resources.map(async (resource) => {
+          const response = await fetch(`/api/${resource}?activeOnly=true&limit=100`);
+          const payload = await response.json().catch(() => ({}));
+          return [resource, payload.data || []] as const;
+        }),
+      )
+        .then((entries) => setOptions(Object.fromEntries(entries)))
+        .catch(() => setError('Unable to load form options.'));
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   async function save(event: FormEvent<HTMLFormElement>) {

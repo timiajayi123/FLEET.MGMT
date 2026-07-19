@@ -9,7 +9,7 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
   async list(query: UsersQueryDto) {
     const where: Prisma.UserWhereInput = { status: query.status, OR: query.search ? [
-      { staffName: { contains: query.search, mode: 'insensitive' } }, { email: { contains: query.search, mode: 'insensitive' } }, { employeeId: { contains: query.search, mode: 'insensitive' } },
+      { staffName: { contains: query.search } }, { email: { contains: query.search } }, { employeeId: { contains: query.search } },
     ] : undefined };
     const [data,total] = await Promise.all([
       this.prisma.user.findMany({ where, select: publicUserSelect, orderBy: { staffName: 'asc' }, skip: (query.page-1)*query.limit, take: query.limit }),

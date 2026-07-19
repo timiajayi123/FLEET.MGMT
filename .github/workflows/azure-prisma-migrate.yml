@@ -1,0 +1,39 @@
+name: Azure Prisma Migrate Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE_AZURE_SQL to run prisma migrate deploy against production Azure SQL.'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    if: ${{ github.event.inputs.confirm == 'MIGRATE_AZURE_SQL' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.AZURE_SQL_DATABASE_URL }}
+        run: npx prisma validate
+
+      - name: Deploy production migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.AZURE_SQL_DATABASE_URL }}
+        run: npx prisma migrate deploy

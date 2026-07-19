@@ -11,7 +11,8 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
   @Post('login') async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(dto);
-    res.cookie(SESSION_COOKIE, result.token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', expires: result.expiresAt, path: '/' });
+    const secure = process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production';
+    res.cookie(SESSION_COOKIE, result.token, { httpOnly: true, sameSite: 'lax', secure, expires: result.expiresAt, path: '/' });
     return { user: result.user };
   }
   @Get('me') async me(@Req() req: Request) {
