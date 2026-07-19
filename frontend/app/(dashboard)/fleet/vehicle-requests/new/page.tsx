@@ -15,7 +15,7 @@ export default function NewVehicleRequestPage() {
       .then((payload) => {
         const roleCode = payload?.user?.role?.code;
         if (roleCode === 'S_ADMIN' || roleCode === 'FM') {
-          router.replace('/fleet/vehicle-allocation');
+          router.replace('/fleet/vehicle-requests/review');
           return;
         }
         setCheckingRole(false);

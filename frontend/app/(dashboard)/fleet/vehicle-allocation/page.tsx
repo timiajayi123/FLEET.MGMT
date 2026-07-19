@@ -8,7 +8,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 type Vehicle = { id: string; registrationNumber: string; manufacturer: string; model: string; status: string };
 type Driver = { id: string; staffName: string; employeeId: string; status: string };
 type CurrentUser = { employeeId: string; role: { code: string; name: string } };
-type VehicleRequest = { id: string; requestNumber: string; staffName: string; purposeOfTrip: string; destination: string; departureDate: string; expectedReturnDate: string; status: string };
+type VehicleRequest = { id: string; requestNumber: string; staffName: string; destination: string; status: string };
 type Allocation = {
   id: string;
   purpose: string;
@@ -22,7 +22,6 @@ type Allocation = {
   driver: Driver;
 };
 type Mode = { type: 'create'; allocation?: undefined } | { type: 'edit'; allocation: Allocation };
-type ApprovalMode = { request: VehicleRequest };
 
 export default function AllocationPage() {
   const [items, setItems] = useState<Allocation[]>([]);
@@ -31,7 +30,6 @@ export default function AllocationPage() {
   const [requests, setRequests] = useState<VehicleRequest[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
-  const [approvalMode, setApprovalMode] = useState<ApprovalMode | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -81,35 +79,6 @@ export default function AllocationPage() {
     await load();
   }
 
-  async function setRequestStatus(id: string, action: 'approve' | 'reject') {
-    const response = await fetch(`/api/vehicle-requests/${id}/${action}`, { method: 'PATCH' });
-    const payload = await readApiJson(response, `Unable to ${action} request.`);
-    if (!response.ok) setError(apiMessage(payload.message, `Unable to ${action} request.`));
-    else await load();
-  }
-
-  async function approveWithAllocation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!approvalMode) return;
-    const body = Object.fromEntries(new FormData(event.currentTarget));
-    body.startAt = new Date(String(body.startAt)).toISOString();
-    body.expectedEndAt = new Date(String(body.expectedEndAt)).toISOString();
-    if (!body.allocationId) delete body.allocationId;
-    const response = await fetch(`/api/vehicle-requests/${approvalMode.request.id}/approve`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const payload = await readApiJson(response, 'Unable to approve and allocate request.');
-    if (!response.ok) {
-      setError(apiMessage(payload.message, 'Unable to approve and allocate request.'));
-      return;
-    }
-    setApprovalMode(null);
-    setError('');
-    await load();
-  }
-
   async function deleteAllocation(allocation: Allocation) {
     const confirmed = window.confirm(
       `Delete allocation for ${allocation.vehicle.registrationNumber} and ${allocation.driver.staffName}?`,
@@ -118,7 +87,7 @@ export default function AllocationPage() {
     const response = await fetch(`/api/vehicle-allocations/${allocation.id}`, { method: 'DELETE' });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message);
+      setError(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || 'Unable to delete allocation.');
       return;
     }
     setError('');
@@ -130,7 +99,6 @@ export default function AllocationPage() {
   const visibleItems = isDriver
     ? items.filter((allocation) => allocation.driver.employeeId === currentUser?.employeeId)
     : items;
-  const pendingRequests = requests.filter((request) => request.status === 'PENDING_APPROVAL');
 
   return (
     <>
@@ -138,8 +106,8 @@ export default function AllocationPage() {
         title={isDriver ? 'My Vehicle Allocations' : 'Vehicle Allocation'}
         description={
           isDriver
-            ? 'View vehicles currently allocated to you for field operations.'
-            : 'Assign vehicles to drivers first, then optionally attach vehicle requests during approval.'
+            ? 'View vehicles currently allocated to you for approved request-backed trips.'
+            : 'View, create, edit, complete, and delete vehicle-driver allocations.'
         }
         actions={
           canManageAllocations ? (
@@ -150,22 +118,6 @@ export default function AllocationPage() {
         }
       />
       {error && <div className="master-alert">{error}</div>}
-      {canManageAllocations && pendingRequests.length > 0 && (
-        <section className="master-panel allocation-request-queue">
-          <header><div><strong>Requests awaiting approval</strong><small>Approve only, or approve and use/change a vehicle-driver allocation.</small></div></header>
-          {pendingRequests.map((request) => (
-            <article key={request.id}>
-              <div><strong>{request.requestNumber} · {request.staffName}</strong><small>{request.purposeOfTrip} · {request.destination}</small></div>
-              <span>{new Date(request.departureDate).toLocaleString()}</span>
-              <div>
-                <button className="secondary-action" onClick={() => void setRequestStatus(request.id, 'reject')}>Reject</button>
-                <button className="secondary-action" onClick={() => void setRequestStatus(request.id, 'approve')}>Approve only</button>
-                <button className="primary-action" onClick={() => setApprovalMode({ request })}>Approve & allocate</button>
-              </div>
-            </article>
-          ))}
-        </section>
-      )}
       <section className="master-panel">
         <div className="master-table-wrap">
           <table className="master-table">
@@ -173,6 +125,7 @@ export default function AllocationPage() {
               <tr>
                 <th>Vehicle</th>
                 <th>Driver</th>
+                <th>Request</th>
                 <th>Purpose</th>
                 <th>Period</th>
                 <th>Status</th>
@@ -193,6 +146,10 @@ export default function AllocationPage() {
                     <small>{allocation.driver.employeeId}</small>
                   </td>
                   <td>
+                    {allocation.request?.requestNumber ?? 'Direct allocation'}
+                    <small>{allocation.request?.staffName ?? ''}</small>
+                  </td>
+                  <td>
                     {allocation.purpose}
                     <small>{allocation.destination || ''}</small>
                   </td>
@@ -200,15 +157,12 @@ export default function AllocationPage() {
                     {new Date(allocation.startAt).toLocaleString()}
                     <small>to {new Date(allocation.expectedEndAt).toLocaleString()}</small>
                   </td>
-                  <td>{allocation.status}</td>
+                  <td>{allocation.status.replaceAll('_', ' ')}</td>
                   <td>
                     <div className="row-actions">
                       {canManageAllocations && ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (
                         <>
-                          <button
-                            aria-label={`Edit allocation ${allocation.id}`}
-                            onClick={() => setMode({ type: 'edit', allocation })}
-                          >
+                          <button aria-label={`Edit allocation ${allocation.id}`} onClick={() => setMode({ type: 'edit', allocation })}>
                             <Pencil size={15} />
                           </button>
                           <button className="secondary-action" onClick={() => void complete(allocation.id)}>
@@ -237,8 +191,8 @@ export default function AllocationPage() {
             <h2>{isDriver ? 'No allocations assigned to you' : 'No allocations yet'}</h2>
             <p>
               {isDriver
-                ? 'When fleet admin assigns a vehicle to your employee ID, it will appear here.'
-                : 'Assign an available vehicle and driver.'}
+                ? 'When fleet admin assigns a vehicle to your employee ID from an approved request, it will appear here.'
+                : 'Create an allocation here, or approve a staff request from Review Requests.'}
             </p>
           </div>
         )}
@@ -251,16 +205,6 @@ export default function AllocationPage() {
           requests={requests.filter((request) => ['APPROVED', 'ALLOCATED'].includes(request.status) || request.id === mode.allocation?.request?.id)}
           onClose={() => setMode(null)}
           onSubmit={(event) => void save(event)}
-        />
-      )}
-      {approvalMode && canManageAllocations && (
-        <ApprovalAllocationModal
-          request={approvalMode.request}
-          allocations={items.filter((allocation) => ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (!allocation.request || allocation.request.id === approvalMode.request.id))}
-          vehicles={vehicles}
-          drivers={drivers}
-          onClose={() => setApprovalMode(null)}
-          onSubmit={(event) => void approveWithAllocation(event)}
         />
       )}
     </>
@@ -331,24 +275,12 @@ function AllocationModal({
                 label: `${driver.staffName} (${driver.employeeId})`,
               }))}
             />
-            <Field
-              name="startAt"
-              label="Start date and time"
-              type="datetime-local"
-              value={toDatetimeLocal(allocation?.startAt)}
-            />
-            <Field
-              name="expectedEndAt"
-              label="Expected return"
-              type="datetime-local"
-              value={toDatetimeLocal(allocation?.expectedEndAt)}
-            />
+            <Field name="startAt" label="Start date and time" type="datetime-local" value={toDatetimeLocal(allocation?.startAt)} />
+            <Field name="expectedEndAt" label="Expected return" type="datetime-local" value={toDatetimeLocal(allocation?.expectedEndAt)} />
             <Field name="notes" label="Notes" required={false} value={allocation?.notes} />
           </div>
           <footer>
-            <button type="button" className="secondary-action" onClick={onClose}>
-              Cancel
-            </button>
+            <button type="button" className="secondary-action" onClick={onClose}>Cancel</button>
             <button className="primary-action" disabled={!vehicleOptions.length || !driverOptions.length}>
               {allocation ? 'Save allocation' : 'Create allocation'}
             </button>
@@ -359,115 +291,7 @@ function AllocationModal({
   );
 }
 
-function ApprovalAllocationModal({
-  request,
-  allocations,
-  vehicles,
-  drivers,
-  onClose,
-  onSubmit,
-}: {
-  request: VehicleRequest;
-  allocations: Allocation[];
-  vehicles: Vehicle[];
-  drivers: Driver[];
-  onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const [allocationId, setAllocationId] = useState('');
-  const selectedAllocation = useMemo(
-    () => allocations.find((allocation) => allocation.id === allocationId),
-    [allocationId, allocations],
-  );
-  const vehicleOptions = vehicles.filter(
-    (vehicle) => vehicle.status === 'AVAILABLE' || vehicle.id === selectedAllocation?.vehicle.id,
-  );
-  const driverOptions = drivers.filter(
-    (driver) => driver.status === 'AVAILABLE' || driver.id === selectedAllocation?.driver.id,
-  );
-
-  return (
-    <div className="master-modal-backdrop">
-      <section className="master-modal">
-        <header>
-          <div>
-            <span>Approve request</span>
-            <h2>{request.requestNumber}</h2>
-          </div>
-          <button onClick={onClose}>x</button>
-        </header>
-        <form onSubmit={onSubmit}>
-          <div className="approval-request-summary">
-            <strong>{request.staffName}</strong>
-            <small>{request.purposeOfTrip} · {request.destination}</small>
-            <small>{new Date(request.departureDate).toLocaleString()} to {new Date(request.expectedReturnDate).toLocaleString()}</small>
-          </div>
-          <div className="master-form-grid">
-            <Select
-              name="allocationId"
-              label="Use existing vehicle-driver allocation"
-              placeholder="Create a new allocation in this approval"
-              required={false}
-              value={allocationId}
-              onChange={setAllocationId}
-              options={allocations.map((allocation) => ({
-                id: allocation.id,
-                label: `${allocation.vehicle.registrationNumber} - ${allocation.driver.staffName} - ${allocation.destination || allocation.purpose}`,
-              }))}
-            />
-            <Select
-              key={`approval-vehicle-${selectedAllocation?.id ?? 'new'}`}
-              name="vehicleId"
-              label="Vehicle"
-              placeholder="Select available vehicle"
-              value={selectedAllocation?.vehicle.id}
-              options={vehicleOptions.map((vehicle) => ({
-                id: vehicle.id,
-                label: `${vehicle.registrationNumber} - ${vehicle.manufacturer} ${vehicle.model}`,
-              }))}
-            />
-            <Select
-              key={`approval-driver-${selectedAllocation?.id ?? 'new'}`}
-              name="driverId"
-              label="Driver"
-              placeholder="Select available driver"
-              value={selectedAllocation?.driver.id}
-              options={driverOptions.map((driver) => ({
-                id: driver.id,
-                label: `${driver.staffName} (${driver.employeeId})`,
-              }))}
-            />
-            <Field name="startAt" label="Start date and time" type="datetime-local" value={toDatetimeLocal(selectedAllocation?.startAt || request.departureDate)} />
-            <Field name="expectedEndAt" label="Expected return" type="datetime-local" value={toDatetimeLocal(selectedAllocation?.expectedEndAt || request.expectedReturnDate)} />
-            <Field name="notes" label="Notes" required={false} value={selectedAllocation?.notes} />
-          </div>
-          <footer>
-            <button type="button" className="secondary-action" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="primary-action" disabled={!vehicleOptions.length || !driverOptions.length}>
-              Approve and use allocation
-            </button>
-          </footer>
-        </form>
-      </section>
-    </div>
-  );
-}
-
-function Field({
-  name,
-  label,
-  type = 'text',
-  required = true,
-  value,
-}: {
-  name: string;
-  label: string;
-  type?: string;
-  required?: boolean;
-  value?: string;
-}) {
+function Field({ name, label, type = 'text', required = true, value }: { name: string; label: string; type?: string; required?: boolean; value?: string }) {
   return (
     <label className="master-field">
       <span>{label}</span>
@@ -483,7 +307,6 @@ function Select({
   options,
   value,
   required = true,
-  onChange,
 }: {
   name: string;
   label: string;
@@ -491,23 +314,14 @@ function Select({
   options: { id: string; label: string }[];
   value?: string;
   required?: boolean;
-  onChange?: (value: string) => void;
 }) {
   return (
     <label className="master-field">
       <span>{label}</span>
-      <select
-        name={name}
-        required={required}
-        {...(onChange ? { value: value ?? '', onChange: (event) => onChange(event.target.value) } : { defaultValue: value ?? '' })}
-      >
-        <option value="" disabled={required}>
-          {placeholder}
-        </option>
+      <select name={name} required={required} defaultValue={value ?? ''}>
+        <option value="" disabled={required}>{placeholder}</option>
         {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
+          <option key={option.id} value={option.id}>{option.label}</option>
         ))}
       </select>
     </label>

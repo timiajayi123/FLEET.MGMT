@@ -50,7 +50,7 @@ export const navigation: NavigationGroup[] = [
       },
       {
         label: 'Review Requests',
-        href: '/fleet/vehicle-allocation',
+        href: '/fleet/vehicle-requests/review',
         icon: ClipboardList,
         roles: ['S_ADMIN', 'FM'],
       },
@@ -58,7 +58,7 @@ export const navigation: NavigationGroup[] = [
         label: 'Vehicle Allocation',
         href: '/fleet/vehicle-allocation',
         icon: Truck,
-        roles: ['DRIVER'],
+        roles: ['S_ADMIN', 'FM', 'DRIVER'],
       },
       { label: 'Trips', href: '/fleet/trips', icon: Route, roles: ['S_ADMIN', 'FM'] },
     ],
