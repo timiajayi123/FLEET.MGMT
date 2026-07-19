@@ -2,17 +2,26 @@
 
 import { PageHeader } from '@/components/page-header';
 import { apiMessage, readApiJson } from '@/lib/api-response';
-import { Activity, ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, MapPin, Navigation, Route, UserCheck, type LucideIcon } from 'lucide-react';
+import { Activity, ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, MapPin, Navigation, Route, X, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type User = { staffName: string; role: { code: string; name: string } };
+type StaffRequest = {
+  id: string;
+  requestNumber: string;
+  destination: string;
+  purposeOfTrip: string;
+  status: string;
+  createdAt: string;
+  allocations: { status: string; driver: { staffName: string }; vehicle: { registrationNumber: string } }[];
+};
 type DashboardData = {
   role: 'ADMIN' | 'STAFF' | 'DRIVER';
   metrics: Record<string, number>;
   activity: { date: string; count: number }[];
   approvalQueue: { id: string; requestNumber: string; staffName: string; destination: string; createdAt: string }[];
-  myRequests?: { id: string; requestNumber: string; destination: string; purposeOfTrip: string; status: string; createdAt: string; allocations: { status: string; driver: { staffName: string }; vehicle: { registrationNumber: string } }[] }[];
+  myRequests?: StaffRequest[];
   currentAssignment?: { id: string; status: string; startAt: string; expectedEndAt: string; purpose: string; destination?: string; vehicle: { registrationNumber: string; manufacturer: string; model: string }; request?: { requestNumber: string; staffName: string; destination: string }; trip?: { status: string } } | null;
   recentTrips?: { id: string; status: string; calculatedDistance?: number; startedAt?: string; endedAt?: string; vehicle: { registrationNumber: string; manufacturer: string; model: string }; request?: { requestNumber: string; staffName: string; destination: string }; allocation: { purpose: string; destination?: string } }[];
 };
@@ -57,7 +66,7 @@ export default function DashboardPage() {
       {data?.role === 'DRIVER' ? (
         <DriverDashboard data={data} />
       ) : data?.role === 'STAFF' ? (
-        <StaffDashboard data={data} days={days} setDays={setDays} />
+        <StaffDashboard data={data} />
       ) : (
         <AdminDashboard data={data} days={days} setDays={setDays} />
       )}
@@ -80,24 +89,119 @@ function AdminDashboard({ data, days, setDays }: { data: DashboardData | null; d
   );
 }
 
-function StaffDashboard({ data, days, setDays }: { data: DashboardData; days: number; setDays: (days: number) => void }) {
+function StaffDashboard({ data }: { data: DashboardData }) {
+  const actionableRequest = useMemo(
+    () => data.myRequests?.find((request) => ['APPROVED', 'ALLOCATED'].includes(request.status)) ?? null,
+    [data.myRequests],
+  );
+  const [visibleRequestId, setVisibleRequestId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!actionableRequest) {
+      setVisibleRequestId(null);
+      return;
+    }
+    const key = `staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`;
+    if (window.localStorage.getItem(key)) {
+      setVisibleRequestId(null);
+      return;
+    }
+    setVisibleRequestId(actionableRequest.id);
+  }, [actionableRequest]);
+
+  function dismissRequestModal() {
+    if (actionableRequest) {
+      window.localStorage.setItem(`staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`, 'dismissed');
+    }
+    setVisibleRequestId(null);
+  }
+
+  const latestRequest = data.myRequests?.[0] ?? null;
+  const readyRequests = (data.metrics.approvedRequests ?? 0) + (data.metrics.allocatedRequests ?? 0);
   const metrics = [
-    { label: 'My requests', value: data.metrics.totalRequests ?? 0, note: 'Submitted by you', icon: ClipboardList, tone: 'green' },
-    { label: 'Pending', value: data.metrics.pendingRequests ?? 0, note: 'Awaiting admin/FM', icon: Clock3, tone: 'amber' },
-    { label: 'Approved', value: data.metrics.approvedRequests ?? 0, note: 'Approved, not yet allocated', icon: CheckCircle2, tone: 'blue' },
-    { label: 'Allocated', value: data.metrics.allocatedRequests ?? 0, note: 'Vehicle and driver assigned', icon: UserCheck, tone: 'purple' },
+    { label: 'My requests', value: data.metrics.totalRequests ?? 0, note: 'All transport requests submitted by you', icon: ClipboardList, tone: 'green' },
+    { label: 'Ready/approved', value: readyRequests, note: 'Approved by fleet admin', icon: CheckCircle2, tone: 'blue' },
+    { label: 'Trips completed', value: data.metrics.completedRequests ?? 0, note: 'Completed transport trips', icon: Route, tone: 'purple' },
   ];
+
   return (
     <>
       <MetricGrid metrics={metrics} />
       <section className="dashboard-grid">
-        <ActivityPanel data={data} days={days} setDays={setDays} title="My request activity" description="Vehicle requests you submitted over time." />
         <article className="panel">
-          <div className="panel-heading"><div><h2>My latest requests</h2><p>Status of your transport requests.</p></div></div>
-          {data.myRequests?.length ? <div className="notification-list">{data.myRequests.map((request) => <div className="notification-item" key={request.id}><span><strong>{request.requestNumber}</strong><small>{request.status.replaceAll('_', ' ')} · {request.destination}</small>{request.allocations[0] && <small>{request.allocations[0].vehicle.registrationNumber} · {request.allocations[0].driver.staffName}</small>}</span></div>)}</div> : <Empty icon={<ClipboardList size={28} />} title="No requests yet" text="Submit a vehicle request to begin the approval workflow." />}
+          <div className="panel-heading"><div><h2>Latest request update</h2><p>Your most recent transport request.</p></div></div>
+          {latestRequest ? (
+            <div className="driver-dashboard-assignment">
+              <strong>{latestRequest.requestNumber}</strong>
+              <span>{latestRequest.destination}</span>
+              <small>{latestRequest.purposeOfTrip}</small>
+              {latestRequest.allocations[0] && <small>{latestRequest.allocations[0].vehicle.registrationNumber} · {latestRequest.allocations[0].driver.staffName}</small>}
+              <em>{staffStatusLabel(latestRequest.status)}</em>
+            </div>
+          ) : (
+            <Empty icon={<ClipboardList size={28} />} title="No request yet" text="Submit a vehicle request when you need official transport." />
+          )}
+        </article>
+        <article className="panel">
+          <div className="panel-heading"><div><h2>My requests</h2><p>Simple status history for your transport requests.</p></div></div>
+          {data.myRequests?.length ? (
+            <div className="notification-list">
+              {data.myRequests.map((request) => (
+                <div className="notification-item" key={request.id}>
+                  <span>
+                    <strong>{request.requestNumber}</strong>
+                    <small>{staffStatusLabel(request.status)} · {request.destination}</small>
+                    {request.allocations[0] && <small>{request.allocations[0].vehicle.registrationNumber} · {request.allocations[0].driver.staffName}</small>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty icon={<ClipboardList size={28} />} title="No requests yet" text="Submit a vehicle request to begin the approval workflow." />
+          )}
         </article>
       </section>
+      {actionableRequest && visibleRequestId === actionableRequest.id && (
+        <StaffRequestStatusModal request={actionableRequest} onClose={dismissRequestModal} />
+      )}
     </>
+  );
+}
+
+function StaffRequestStatusModal({ request, onClose }: { request: StaffRequest; onClose: () => void }) {
+  const allocation = request.allocations[0];
+  const allocated = request.status === 'ALLOCATED' && allocation;
+  return (
+    <div className="master-modal-backdrop">
+      <section className="staff-request-status-modal" role="dialog" aria-modal="true" aria-labelledby="staff-request-status-title">
+        <button className="staff-request-status-close" aria-label="Close request status update" onClick={onClose}>
+          <X size={18} />
+        </button>
+        <div className="staff-request-status-icon">
+          <CheckCircle2 size={34} />
+        </div>
+        <small>VEHICLE REQUEST UPDATE</small>
+        <h2 id="staff-request-status-title">
+          {allocated ? 'Your transport is ready' : 'Your request has been approved'}
+        </h2>
+        <p>
+          Request <strong>{request.requestNumber}</strong> for <strong>{request.destination}</strong> is now{' '}
+          <strong>{staffStatusLabel(request.status)}</strong>.
+        </p>
+        {allocated ? (
+          <div className="staff-request-status-grid">
+            <span><small>Vehicle</small><strong>{allocation.vehicle.registrationNumber}</strong></span>
+            <span><small>Driver</small><strong>{allocation.driver.staffName}</strong></span>
+            <span><small>Assignment</small><strong>{allocation.status.replaceAll('_', ' ')}</strong></span>
+          </div>
+        ) : (
+          <div className="modal-alert info">Fleet admin has approved the request. Vehicle and driver allocation will appear here once assigned.</div>
+        )}
+        <footer>
+          <button className="primary-action" onClick={onClose}>Okay, got it</button>
+        </footer>
+      </section>
+    </div>
   );
 }
 
@@ -142,8 +246,18 @@ function Empty({ icon, title, text }: { icon: ReactNode; title: string; text: st
   return <div className="empty-compact">{icon}<strong>{title}</strong><span>{text}</span></div>;
 }
 
+function staffStatusLabel(status: string) {
+  return {
+    PENDING_APPROVAL: 'Submitted for review',
+    APPROVED: 'Approved',
+    ALLOCATED: 'Transport assigned',
+    COMPLETED: 'Trip completed',
+    REJECTED: 'Rejected',
+  }[status] ?? status.replaceAll('_', ' ');
+}
+
 function description(roleCode?: string) {
   if (roleCode === 'DRIVER') return 'Your approved request-backed assignments, completed trips and live trip status.';
-  if (roleCode === 'ST') return 'Your vehicle requests, approvals and allocated transport updates.';
+  if (roleCode === 'ST') return 'Your vehicle request status and transport updates.';
   return 'Fleet requests, allocations, trips and operational activity.';
 }

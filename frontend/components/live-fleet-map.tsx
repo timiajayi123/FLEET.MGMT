@@ -3,7 +3,6 @@
 import { loadGoogleMaps, type GoogleMap, type GoogleMapsNamespace, type GoogleMarker } from '@/lib/google-maps';
 import { Crosshair, Expand, List, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, Search, Square } from 'lucide-react';
 import { io, type Socket } from 'socket.io-client';
-import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Position = {
@@ -264,7 +263,7 @@ export function LiveFleetMap() {
                 <strong>{selectedPosition.driver.staffName}</strong>
                 <small>{selectedPosition.driver.employeeId} - {selectedPosition.driver.phone || 'No phone'}</small>
               </div>
-              <AdminSpeedometer speedMetresPerSecond={selectedPosition.speed} />
+              <AdminSpeedCard speedMetresPerSecond={selectedPosition.speed} recordedAt={selectedPosition.recordedAt} />
               <dl>
                 <div><dt>Vehicle</dt><dd>{selectedPosition.vehicle.registrationNumber}</dd></div>
                 <div><dt>Type</dt><dd>{vehicleIconLabel(vehicleIconKind(selectedPosition))}</dd></div>
@@ -363,26 +362,12 @@ function vehicleMarkerSvg(kind: VehicleIconKind, fill: string) {
   </svg>`;
 }
 
-function AdminSpeedometer({ speedMetresPerSecond }: { speedMetresPerSecond?: number }) {
-  const speed = Math.max(0, Math.round((speedMetresPerSecond ?? 0) * 3.6));
-  const displayedSpeed = Math.min(speed, 180);
-  const angle = -180 + displayedSpeed;
-  const style = { '--speed-angle': `${angle}deg` } as CSSProperties;
+function AdminSpeedCard({ speedMetresPerSecond, recordedAt }: { speedMetresPerSecond?: number; recordedAt?: string }) {
+  const hasSpeed = typeof speedMetresPerSecond === 'number' && Number.isFinite(speedMetresPerSecond);
+  const speed = hasSpeed ? Math.max(0, Math.round(speedMetresPerSecond * 3.6)) : null;
+  const percent = Math.min(100, ((speed ?? 0) / 120) * 100);
 
-  return (
-    <div className="speedometer admin-speedometer" style={style} role="meter" aria-label={`Current speed ${speed} kilometres per hour`} aria-valuemin={0} aria-valuemax={180} aria-valuenow={speed}>
-      <div className="speedometer-face">
-        <span className="speed-mark mark-0">0</span>
-        <span className="speed-mark mark-60">60</span>
-        <span className="speed-mark mark-120">120</span>
-        <span className="speed-mark mark-180">180</span>
-        <i className="speed-needle" />
-        <i className="speed-hub" />
-        <div className="speed-readout"><strong>{speed}</strong><small>km/h</small></div>
-      </div>
-      <span className="speed-caption">DRIVER SPEED</span>
-    </div>
-  );
+  return <div className="speed-card admin-speed-card" role="meter" aria-label={hasSpeed ? `Current speed ${speed} kilometres per hour` : 'Current speed unavailable'} aria-valuemin={0} aria-valuemax={120} aria-valuenow={speed ?? undefined}><div className="speed-card-top"><span>Driver speed</span><strong>{speed ?? '—'}<small>km/h</small></strong></div><div className="speed-bar" aria-hidden="true"><i style={{ width: `${percent}%` }}/></div><div className="speed-card-scale"><span>0</span><span>60</span><span>120+</span></div><p>{hasSpeed ? `Latest GPS point · ${recordedAt ? new Date(recordedAt).toLocaleTimeString() : 'now'}` : 'No GPS speed value yet.'}</p></div>;
 }
 
 function popup(position: Position) {
