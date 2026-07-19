@@ -10,7 +10,7 @@ export async function readApiJson<T = unknown>(
     return {
       message:
         response.status >= 500
-          ? 'Backend API is unavailable or returned an internal server error. Make sure the backend is running on port 3002.'
+          ? 'Backend API is unavailable or returned an internal server error. Make sure the backend is running on port 3001.'
           : fallback,
     } as T & { message?: string | string[] };
   }

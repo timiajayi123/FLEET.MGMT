@@ -92,7 +92,7 @@ export function MasterDataAdmin({
       });
       if (search) query.set('search', search);
       if (status) query.set('status', status);
-      const response = await fetch(apiPath(`/${resource}?${query}`), { cache: 'no-store' });
+      const response = await fetch(apiPath(`/${resource}?${query}`), { cache: 'no-store', credentials: 'include' });
       const payload = (await response.json()) as {
         data?: RecordItem[];
         meta?: Meta;
@@ -117,7 +117,7 @@ export function MasterDataAdmin({
     if (!('parentResource' in config)) return;
     fetch(
       apiPath(`/${config.parentResource}?status=ACTIVE&limit=100&sortBy=name&sortOrder=asc`),
-      { cache: 'no-store' },
+      { cache: 'no-store', credentials: 'include' },
     )
       .then((response) => response.json())
       .then((payload: { data?: RecordItem[] }) => setParents(payload.data ?? []))
@@ -161,6 +161,7 @@ export function MasterDataAdmin({
         {
           method: modal === 'edit' ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(body),
         },
       );
@@ -184,6 +185,7 @@ export function MasterDataAdmin({
     try {
       const response = await fetch(apiPath(`/${resource}/${selected.id}`), {
         method: 'DELETE',
+        credentials: 'include',
       });
       const payload = (await response.json()) as { message?: string | string[] };
       if (!response.ok)
