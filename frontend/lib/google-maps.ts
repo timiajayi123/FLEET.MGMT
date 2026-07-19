@@ -23,6 +23,7 @@ export type GooglePlace = {
 };
 export type GoogleMarker = {
   addListener: (eventName: string, handler: () => void) => GoogleMapsListener;
+  setLabel: (label: Record<string, unknown> | string | null) => void;
   setIcon: (icon: Record<string, unknown>) => void;
   setMap: (map: GoogleMap | null) => void;
   setPosition: (point: GooglePoint) => void;
