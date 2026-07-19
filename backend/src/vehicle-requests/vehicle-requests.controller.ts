@@ -9,6 +9,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  ForbiddenException,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -57,6 +58,9 @@ export class VehicleRequestsController {
     attachment?: Express.Multer.File,
   ) {
     const user = await requireUser(this.auth, req);
+    if (FLEET_MANAGER_ROLES.includes(user.role.code as (typeof FLEET_MANAGER_ROLES)[number])) {
+      throw new ForbiddenException('Admins review and approve vehicle requests; staff users submit requests.');
+    }
     return this.vehicleRequestsService.create(dto, attachment, user.id);
   }
 }

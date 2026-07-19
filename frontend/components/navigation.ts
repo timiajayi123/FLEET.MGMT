@@ -43,16 +43,22 @@ export const navigation: NavigationGroup[] = [
       { label: 'Vehicles', href: '/fleet/vehicles', icon: CarFront, roles: ['S_ADMIN', 'FM'] },
       { label: 'Drivers', href: '/fleet/drivers', icon: Users, roles: ['S_ADMIN', 'FM'] },
       {
-        label: 'Vehicle Requests',
+        label: 'Request Vehicle',
         href: '/fleet/vehicle-requests/new',
         icon: ClipboardList,
-        roles: ['S_ADMIN', 'FM', 'ST'],
+        roles: ['ST'],
+      },
+      {
+        label: 'Review Requests',
+        href: '/fleet/vehicle-allocation',
+        icon: ClipboardList,
+        roles: ['S_ADMIN', 'FM'],
       },
       {
         label: 'Vehicle Allocation',
         href: '/fleet/vehicle-allocation',
         icon: Truck,
-        roles: ['S_ADMIN', 'FM', 'DRIVER'],
+        roles: ['DRIVER'],
       },
       { label: 'Trips', href: '/fleet/trips', icon: Route, roles: ['S_ADMIN', 'FM'] },
     ],
@@ -116,7 +122,6 @@ export const moduleMetadata = new Map(
 export function canAccessNavigationItem(item: NavigationItem, roleCode?: string) {
   if (!item.roles?.length) return true;
   if (!roleCode) return false;
-  if (roleCode === 'S_ADMIN') return true;
   return item.roles.includes(roleCode);
 }
 
@@ -131,11 +136,12 @@ export function visibleNavigation(roleCode?: string) {
 
 export function canAccessPath(pathname: string, roleCode?: string) {
   if (!roleCode) return false;
-  if (roleCode === 'S_ADMIN') return true;
   if (pathname === '/dashboard' || pathname === '/profile') return true;
   const items = navigation
     .flatMap((group) => group.items)
     .sort((a, b) => b.href.length - a.href.length);
-  const item = items.find((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`));
-  return item ? canAccessNavigationItem(item, roleCode) : false;
+  const matchingItems = items.filter((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`));
+  return matchingItems.length
+    ? matchingItems.some((item) => canAccessNavigationItem(item, roleCode))
+    : false;
 }
