@@ -23,9 +23,10 @@ export class TrackingService {
     const simulatorAllowed = process.env.NODE_ENV !== 'production' && simulatorFlag === 'true' && ['S_ADMIN', 'FM'].includes(user.role.code);
     if (simulated && !simulatorAllowed) throw new BadRequestException('GPS simulator is disabled or unauthorized.');
     const allocation = simulated && dto.allocationId
-      ? await this.prisma.vehicleAllocation.findUnique({ where: { id: dto.allocationId }, include: { driver: true, trip: true } })
-      : await this.prisma.vehicleAllocation.findFirst({ where: { driver: { employeeId: user.employeeId }, status: 'IN_PROGRESS' }, include: { driver: true, trip: true } });
+      ? await this.prisma.vehicleAllocation.findUnique({ where: { id: dto.allocationId }, include: { driver: true, trip: true, request: true } })
+      : await this.prisma.vehicleAllocation.findFirst({ where: { driver: { employeeId: user.employeeId }, status: 'IN_PROGRESS', requestId: { not: null }, request: { status: 'ALLOCATED' } }, include: { driver: true, trip: true, request: true } });
     if (!allocation || allocation.status !== 'IN_PROGRESS' || !allocation.trip || allocation.trip.status !== 'IN_PROGRESS') throw new NotFoundException('No in-progress trip is available for tracking.');
+    if (!allocation.requestId || allocation.request?.status !== 'ALLOCATED') throw new BadRequestException('Live tracking requires an approved and allocated vehicle request.');
     if (!simulated && allocation.driver.employeeId !== user.employeeId) throw new NotFoundException('No in-progress trip is available for tracking.');
     if (dto.tripId && dto.tripId !== allocation.trip.id) throw new BadRequestException('Trip and allocation do not match.');
     const clientEventId = dto.clientEventId || randomUUID();
@@ -43,7 +44,7 @@ export class TrackingService {
   async live() {
     const now = Date.now();
     const data = await this.prisma.driverCurrentLocation.findMany({
-      where: { trip: { status: 'IN_PROGRESS' } },
+      where: { trip: { status: 'IN_PROGRESS' }, allocation: { requestId: { not: null }, request: { status: 'ALLOCATED' } } },
       include: { driver: true, vehicle: { include: { vehicleType: true } }, trip: true, allocation: { include: { request: { include: { requester: true } } } } },
     });
     return { data: data.map((item) => ({ ...item, connectionStatus: now - item.recordedAt.getTime() > 5 * 60_000 ? 'OFFLINE' : now - item.recordedAt.getTime() > 60_000 ? 'STALE' : item.speed && item.speed > 1 ? 'MOVING' : 'STATIONARY' })), generatedAt: new Date() };

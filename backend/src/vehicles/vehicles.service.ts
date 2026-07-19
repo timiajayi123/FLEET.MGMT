@@ -38,7 +38,38 @@ const select = {
 export class VehiclesService {
   constructor(private prisma: PrismaService) {}
   list() {
-    return this.prisma.vehicle.findMany({ select, orderBy: { registrationNumber: 'asc' } });
+    return this.prisma.$queryRaw`
+      SELECT
+        TOP (1000)
+        id,
+        registrationNumber,
+        serialNumber,
+        locationUser,
+        privateRegistrationNumber,
+        officialRegistrationNumber,
+        manufacturer,
+        model,
+        year,
+        purchaseCost,
+        bookedValue,
+        estimatedCost,
+        reservedPresentValue,
+        age,
+        serviceability,
+        legacyAgency,
+        chassisNumber,
+        engineNumber,
+        remark,
+        faultDescription,
+        color,
+        status,
+        locationId,
+        vehicleTypeId,
+        imageMimeType,
+        createdAt,
+        updatedAt
+      FROM dbo.vehicles WITH (NOLOCK)
+    `;
   }
   create(dto: SaveVehicleDto) {
     return this.prisma.vehicle.create({ data: this.data(dto), select });

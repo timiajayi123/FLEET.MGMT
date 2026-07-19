@@ -6,15 +6,39 @@ import { TripCoordinateDto } from './tracking.dto';
 export class TripsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  list(user: { employeeId: string; role: { code: string } }) {
+    const where = user.role.code === 'DRIVER'
+      ? { driver: { employeeId: user.employeeId }, requestId: { not: null } }
+      : { requestId: { not: null } };
+    return this.prisma.trip.findMany({
+      where,
+      include: {
+        driver: { select: { id: true, staffName: true, employeeId: true, phone: true } },
+        vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true } },
+        request: { select: { id: true, requestNumber: true, staffName: true, employeeId: true, purposeOfTrip: true, destination: true, status: true, departureDate: true, expectedReturnDate: true } },
+        allocation: { select: { id: true, status: true, startAt: true, expectedEndAt: true, actualStartAt: true, actualEndAt: true, destination: true, purpose: true } },
+        _count: { select: { locationHistory: true } },
+      },
+      orderBy: [{ startedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
+    });
+  }
+
   current(employeeId: string) {
-    return this.prisma.vehicleAllocation.findFirst({ where: { driver: { employeeId }, status: 'IN_PROGRESS' }, include: { trip: true, vehicle: true, request: true } });
+    return this.prisma.vehicleAllocation.findFirst({
+      where: { driver: { employeeId }, status: 'IN_PROGRESS', requestId: { not: null }, request: { status: 'ALLOCATED' } },
+      include: { trip: true, vehicle: true, request: true },
+    });
   }
 
   async start(allocationId: string, employeeId: string, coordinate: TripCoordinateDto) {
     return this.prisma.$transaction(async (tx) => {
-      const allocation = await tx.vehicleAllocation.findUnique({ where: { id: allocationId }, include: { driver: true, trip: true } });
+      const allocation = await tx.vehicleAllocation.findUnique({ where: { id: allocationId }, include: { driver: true, trip: true, request: true } });
       if (!allocation || allocation.driver.employeeId !== employeeId) throw new NotFoundException('Assignment not found for this driver.');
       if (!['ASSIGNED', 'ACCEPTED'].includes(allocation.status)) throw new BadRequestException('This assignment cannot be started.');
+      if (!allocation.requestId || allocation.request?.status !== 'ALLOCATED') {
+        throw new BadRequestException('Live tracking can only start after an approved vehicle request has been allocated to this driver.');
+      }
       const now = new Date();
       const trip = allocation.trip
         ? await tx.trip.update({ where: { id: allocation.trip.id }, data: { status: 'IN_PROGRESS', startedAt: now, startLatitude: coordinate.latitude, startLongitude: coordinate.longitude } })

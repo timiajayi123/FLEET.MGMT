@@ -12,13 +12,20 @@ const include = {
   trip: true,
 } as const;
 
+const REQUEST_BACKED_DRIVER_ASSIGNMENT = {
+  requestId: { not: null },
+  request: { status: { in: ['ALLOCATED', 'APPROVED'] } },
+} satisfies Prisma.VehicleAllocationWhereInput;
+
 @Injectable()
 export class AllocationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   list(user: Pick<User, 'employeeId'> & { role: { code: string } }) {
     return this.prisma.vehicleAllocation.findMany({
-      where: user.role.code === 'DRIVER' ? { driver: { employeeId: user.employeeId } } : undefined,
+      where: user.role.code === 'DRIVER'
+        ? { driver: { employeeId: user.employeeId }, ...REQUEST_BACKED_DRIVER_ASSIGNMENT }
+        : undefined,
       include,
       orderBy: { createdAt: 'desc' },
     });
@@ -28,7 +35,10 @@ export class AllocationsService {
     const driver = await this.prisma.driver.findUnique({ where: { employeeId } });
     if (!driver) throw new NotFoundException('Your user account is not linked to a driver profile.');
     const allocations = await this.prisma.vehicleAllocation.findMany({
-      where: { driverId: driver.id }, include, orderBy: { startAt: 'desc' }, take: 30,
+      where: { driverId: driver.id, ...REQUEST_BACKED_DRIVER_ASSIGNMENT },
+      include,
+      orderBy: { startAt: 'desc' },
+      take: 30,
     });
     return {
       driver,
