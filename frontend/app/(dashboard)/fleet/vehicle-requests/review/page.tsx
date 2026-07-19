@@ -50,6 +50,7 @@ export default function ReviewRequestsPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('PENDING_APPROVAL');
   const [error, setError] = useState('');
+  const [modalError, setModalError] = useState('');
 
   const load = useCallback(async () => {
     const [requestPayload, allocationPayload, vehiclePayload, driverPayload] = await Promise.all([
@@ -116,10 +117,11 @@ export default function ReviewRequestsPage() {
     });
     const payload = await readApiJson(response, 'Unable to approve and allocate request.');
     if (!response.ok) {
-      setError(apiMessage(payload.message, 'Unable to approve and allocate request.'));
+      setModalError(apiMessage(payload.message, 'Unable to approve and allocate request.'));
       return;
     }
     setApprovalRequest(null);
+    setModalError('');
     setError('');
     await load();
   }
@@ -181,7 +183,7 @@ export default function ReviewRequestsPage() {
                   <td>{request.priority}</td>
                   <td>{request.status.replaceAll('_', ' ')}</td>
                   <td>
-                    <div className="row-actions">
+                    <div className="row-actions review-request-actions">
                       <button aria-label={`View ${request.requestNumber}`} onClick={() => setSelectedRequest(request)}>
                         <Eye size={15} />
                       </button>
@@ -193,7 +195,7 @@ export default function ReviewRequestsPage() {
                           <button className="secondary-action" onClick={() => void setRequestStatus(request.id, 'approve')}>
                             <CheckCircle2 size={15} /> Approve only
                           </button>
-                          <button className="primary-action" onClick={() => setApprovalRequest(request)}>
+                          <button className="primary-action" onClick={() => { setModalError(''); setApprovalRequest(request); }}>
                             Approve & allocate
                           </button>
                         </>
@@ -219,7 +221,9 @@ export default function ReviewRequestsPage() {
           allocations={allocations.filter((allocation) => ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (!allocation.request || allocation.request.id === approvalRequest.id))}
           vehicles={vehicles}
           drivers={drivers}
-          onClose={() => setApprovalRequest(null)}
+          onClose={() => { setModalError(''); setApprovalRequest(null); }}
+          error={modalError}
+          onClearError={() => setModalError('')}
           onSubmit={(event) => void approveWithAllocation(event)}
         />
       )}
@@ -266,6 +270,8 @@ function ApprovalAllocationModal({
   vehicles,
   drivers,
   onClose,
+  error,
+  onClearError,
   onSubmit,
 }: {
   request: VehicleRequest;
@@ -273,6 +279,8 @@ function ApprovalAllocationModal({
   vehicles: Vehicle[];
   drivers: Driver[];
   onClose: () => void;
+  error: string;
+  onClearError: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [allocationId, setAllocationId] = useState('');
@@ -299,6 +307,12 @@ function ApprovalAllocationModal({
             <small>{request.purposeOfTrip}</small>
             <small>{request.destination} · {new Date(request.departureDate).toLocaleString()} to {new Date(request.expectedReturnDate).toLocaleString()}</small>
           </div>
+          {error && <div className="modal-alert error">{error}</div>}
+          {selectedAllocation && (
+            <div className="modal-alert info">
+              Using existing allocation for {selectedAllocation.vehicle.registrationNumber} and {selectedAllocation.driver.staffName}. This prevents creating an overlapping active allocation.
+            </div>
+          )}
           <div className="master-form-grid">
             <Select
               name="allocationId"
@@ -306,7 +320,10 @@ function ApprovalAllocationModal({
               placeholder="Create a new allocation in this approval"
               required={false}
               value={allocationId}
-              onChange={setAllocationId}
+              onChange={(value) => {
+                onClearError();
+                setAllocationId(value);
+              }}
               options={allocations.map((allocation) => ({
                 id: allocation.id,
                 label: `${allocation.vehicle.registrationNumber} - ${allocation.driver.staffName} - ${allocation.destination || allocation.purpose}`,

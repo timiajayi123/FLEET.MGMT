@@ -1555,6 +1555,43 @@ button {
   cursor: not-allowed;
   opacity: 0.35;
 }
+.review-request-actions {
+  min-width: 18rem;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.4rem;
+}
+.review-request-actions .primary-action,
+.review-request-actions .secondary-action {
+  display: inline-flex;
+  width: auto;
+  min-width: max-content;
+  height: 2.2rem;
+  padding: 0 0.65rem;
+  white-space: nowrap;
+}
+.review-request-actions > button:not(.primary-action):not(.secondary-action) {
+  flex: none;
+}
+.modal-alert {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+.modal-alert.error {
+  border-color: #efb7b7;
+  color: #8b2020;
+  background: #fff3f3;
+}
+.modal-alert.info {
+  border-color: #b9d8c8;
+  color: #126441;
+  background: #effaf4;
+}
 .import-readiness {
   display: flex;
   align-items: center;
