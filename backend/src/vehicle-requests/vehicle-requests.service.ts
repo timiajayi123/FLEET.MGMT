@@ -3,12 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MasterDataStatus } from '../common/status.constants';
 import { CreateVehicleRequestDto } from './dto/create-vehicle-request.dto';
+import { AllocationsService } from '../allocations/allocations.service';
+import { ApproveRequestAllocationDto } from '../allocations/allocations.dto';
 
 const ALLOWED_ATTACHMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
 @Injectable()
 export class VehicleRequestsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly allocations: AllocationsService) {}
 
   list(user: { id: string; role: { code: string } }) {
     return this.prisma.vehicleRequest.findMany({
@@ -29,6 +31,13 @@ export class VehicleRequestsService {
       throw new BadRequestException('An allocated or completed request cannot be changed.');
     }
     return this.prisma.vehicleRequest.update({ where: { id }, data: { status }, omit: { attachmentData: true } });
+  }
+
+  async approve(id: string, assignedById: string, dto?: Partial<ApproveRequestAllocationDto>) {
+    if (dto?.vehicleId && dto?.driverId && dto?.startAt && dto?.expectedEndAt) {
+      return this.allocations.assignRequest(id, dto as ApproveRequestAllocationDto, assignedById);
+    }
+    return this.setStatus(id, 'APPROVED');
   }
 
   async create(dto: CreateVehicleRequestDto, attachment?: Express.Multer.File, requesterId?: string) {

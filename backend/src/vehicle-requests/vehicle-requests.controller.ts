@@ -19,6 +19,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateVehicleRequestDto } from './dto/create-vehicle-request.dto';
 import { VehicleRequestsService } from './vehicle-requests.service';
 import { FLEET_MANAGER_ROLES, requireUser } from '../common/request-auth';
+import { ApproveRequestAllocationDto } from '../allocations/allocations.dto';
 
 @Controller('vehicle-requests')
 export class VehicleRequestsController {
@@ -31,9 +32,9 @@ export class VehicleRequestsController {
   }
 
   @Patch(':id/approve')
-  async approve(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string) {
-    await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]);
-    return { data: await this.vehicleRequestsService.setStatus(id, 'APPROVED') };
+  async approve(@Req() req: Request, @Param('id', ParseUUIDPipe) id: string, @Body() dto: Partial<ApproveRequestAllocationDto>) {
+    const user = await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]);
+    return { data: await this.vehicleRequestsService.approve(id, user.id, dto) };
   }
 
   @Patch(':id/reject')

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, User } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateAllocationDto } from './allocations.dto';
+import { ApproveRequestAllocationDto, CreateAllocationDto } from './allocations.dto';
 
 const ACTIVE = ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'];
 const include = {
@@ -46,7 +46,20 @@ export class AllocationsService {
     return this.prisma.$transaction((tx) => this.save(tx, id, dto, assignedById));
   }
 
-  private async save(tx: Prisma.TransactionClient, id: string | undefined, dto: CreateAllocationDto, assignedById: string) {
+  async assignRequest(requestId: string, dto: ApproveRequestAllocationDto, assignedById: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.vehicleRequest.findUnique({ where: { id: requestId } });
+      if (!request) throw new NotFoundException('Vehicle request not found.');
+      if (!['PENDING_APPROVAL', 'REJECTED', 'APPROVED', 'ALLOCATED'].includes(request.status)) {
+        throw new BadRequestException('This request cannot be allocated.');
+      }
+      const allocation = await this.save(tx, dto.allocationId, { ...dto, requestId }, assignedById, true);
+      await tx.vehicleRequest.update({ where: { id: requestId }, data: { status: 'ALLOCATED' } });
+      return allocation;
+    });
+  }
+
+  private async save(tx: Prisma.TransactionClient, id: string | undefined, dto: CreateAllocationDto, assignedById: string, allowPendingRequest = false) {
     const startAt = new Date(dto.startAt);
     const expectedEndAt = new Date(dto.expectedEndAt);
     if (expectedEndAt <= startAt) throw new BadRequestException('Expected end must be after scheduled departure.');
@@ -56,11 +69,13 @@ export class AllocationsService {
       throw new BadRequestException('Only an assignment that has not started can be changed.');
     }
     const [request, vehicle, driver] = await Promise.all([
-      tx.vehicleRequest.findUnique({ where: { id: dto.requestId } }),
+      dto.requestId ? tx.vehicleRequest.findUnique({ where: { id: dto.requestId } }) : Promise.resolve(null),
       tx.vehicle.findUnique({ where: { id: dto.vehicleId } }),
       tx.driver.findUnique({ where: { id: dto.driverId } }),
     ]);
-    if (!request || !['APPROVED', 'ALLOCATED'].includes(request.status)) throw new BadRequestException('Only an approved request can be allocated.');
+    if (dto.requestId && (!request || !['APPROVED', 'ALLOCATED', ...(allowPendingRequest ? ['PENDING_APPROVAL', 'REJECTED'] : [])].includes(request.status))) {
+      throw new BadRequestException('Only an approved request can be allocated.');
+    }
     if (!vehicle || (vehicle.status !== 'AVAILABLE' && vehicle.id !== existing?.vehicleId)) throw new BadRequestException('Selected vehicle is not available.');
     if (!driver || driver.status === 'INACTIVE' || (driver.status !== 'AVAILABLE' && driver.id !== existing?.driverId)) throw new BadRequestException('Selected driver is not available.');
     const overlap = { status: { in: ACTIVE }, startAt: { lt: expectedEndAt }, expectedEndAt: { gt: startAt }, id: id ? { not: id } : undefined } satisfies Prisma.VehicleAllocationWhereInput;
@@ -72,15 +87,21 @@ export class AllocationsService {
     if (driverConflict) throw new BadRequestException('Driver has an overlapping active allocation.');
     if (existing && existing.vehicleId !== dto.vehicleId) await tx.vehicle.update({ where: { id: existing.vehicleId }, data: { status: 'AVAILABLE' } });
     if (existing && existing.driverId !== dto.driverId) await tx.driver.update({ where: { id: existing.driverId }, data: { status: 'AVAILABLE' } });
-    const data = { requestId: dto.requestId, vehicleId: dto.vehicleId, driverId: dto.driverId, assignedById, purpose: request.purposeOfTrip, destination: request.destination, startAt, expectedEndAt, notes: dto.notes || null, status: 'ASSIGNED', rejectionReason: null };
+    const purpose = request?.purposeOfTrip ?? dto.purpose?.trim();
+    const destination = request?.destination ?? dto.destination?.trim();
+    if (!purpose) throw new BadRequestException('Purpose is required for a direct vehicle-driver allocation.');
+    if (!destination) throw new BadRequestException('Destination is required for a direct vehicle-driver allocation.');
+    const data = { requestId: dto.requestId ?? null, vehicleId: dto.vehicleId, driverId: dto.driverId, assignedById, purpose, destination, startAt, expectedEndAt, notes: dto.notes || null, status: 'ASSIGNED', rejectionReason: null };
     const allocation = existing
       ? await tx.vehicleAllocation.update({ where: { id: existing.id }, data, include })
       : await tx.vehicleAllocation.create({ data, include });
-    await Promise.all([
+    const updates: Promise<unknown>[] = [
       tx.vehicle.update({ where: { id: dto.vehicleId }, data: { status: 'ALLOCATED' } }),
       tx.driver.update({ where: { id: dto.driverId }, data: { status: 'ASSIGNED' } }),
-      tx.vehicleRequest.update({ where: { id: dto.requestId }, data: { status: 'ALLOCATED' } }),
-    ]);
+    ];
+    if (dto.requestId) updates.push(tx.vehicleRequest.update({ where: { id: dto.requestId }, data: { status: 'ALLOCATED' } }));
+    if (existing?.requestId && existing.requestId !== dto.requestId) updates.push(tx.vehicleRequest.update({ where: { id: existing.requestId }, data: { status: 'APPROVED' } }));
+    await Promise.all(updates);
     return allocation;
   }
 
