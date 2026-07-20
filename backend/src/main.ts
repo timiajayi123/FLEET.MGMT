@@ -16,6 +16,7 @@ async function bootstrap() {
   const allowedOrigins = allowedCorsOrigins();
   app.enableCors({
     origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
+      console.log('CORS origin check:', { origin, allowedOrigins });
       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error('Origin is not allowed by CORS.'));
     },

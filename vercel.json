@@ -1,13 +1,23 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build -w frontend",
-  "outputDirectory": "frontend/.next",
-  "installCommand": "npm install",
-  "framework": "nextjs",
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/:path*",
-      "destination": "https://backend.onestopshop.com.ng/api/:path*"
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "https://backend.onestopshop.com.ng/api/$1"
+    },
+    {
+      "src": "/socket.io/(.*)",
+      "dest": "https://backend.onestopshop.com.ng/socket.io/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/$1"
     }
   ]
 }
