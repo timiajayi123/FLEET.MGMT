@@ -9,7 +9,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://cannon-monetary-tennessee-them.trycloudflare.com/api/$1"
+      "dest": "https://backend.onestopshop.com.ng/api/$1"
+    },
+    {
+      "src": "/socket.io/(.*)",
+      "dest": "https://backend.onestopshop.com.ng/socket.io/$1"
     },
     {
       "src": "/(.*)",
