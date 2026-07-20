@@ -37,7 +37,7 @@ export class VehicleRequestsService {
     if (dto?.vehicleId && dto?.driverId && dto?.startAt && dto?.expectedEndAt) {
       return this.allocations.assignRequest(id, dto as ApproveRequestAllocationDto, assignedById);
     }
-    return this.setStatus(id, 'APPROVED');
+    throw new BadRequestException('Approving a vehicle request requires allocating a vehicle and driver.');
   }
 
   async create(dto: CreateVehicleRequestDto, attachment?: Express.Multer.File, requesterId?: string) {

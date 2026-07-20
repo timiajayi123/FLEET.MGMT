@@ -2,7 +2,7 @@
 
 import { PageHeader } from '@/components/page-header';
 import { apiMessage, readApiJson } from '@/lib/api-response';
-import { CheckCircle2, Eye, Search, XCircle } from 'lucide-react';
+import { Eye, Search, XCircle } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 type Vehicle = { id: string; registrationNumber: string; manufacturer: string; model: string; status: string };
@@ -92,7 +92,8 @@ export default function ReviewRequestsPage() {
     });
   }, [query, requests, statusFilter]);
 
-  async function setRequestStatus(id: string, action: 'approve' | 'reject') {
+  async function rejectRequest(id: string) {
+    const action = 'reject';
     const response = await fetch(`/api/vehicle-requests/${id}/${action}`, { method: 'PATCH' });
     const payload = await readApiJson(response, `Unable to ${action} request.`);
     if (!response.ok) {
@@ -130,7 +131,7 @@ export default function ReviewRequestsPage() {
     <>
       <PageHeader
         title="Review Requests"
-        description="Review staff vehicle requests, inspect details, approve, reject, or approve and allocate a vehicle-driver pair."
+        description="Review staff vehicle requests, inspect details, reject, or approve and allocate a vehicle-driver pair."
       />
       {error && <div className="master-alert">{error}</div>}
       <section className="master-panel">
@@ -189,11 +190,8 @@ export default function ReviewRequestsPage() {
                       </button>
                       {['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status) && (
                         <>
-                          <button className="secondary-action" onClick={() => void setRequestStatus(request.id, 'reject')}>
+                          <button className="secondary-action" onClick={() => void rejectRequest(request.id)}>
                             <XCircle size={15} /> Reject
-                          </button>
-                          <button className="secondary-action" onClick={() => void setRequestStatus(request.id, 'approve')}>
-                            <CheckCircle2 size={15} /> Approve only
                           </button>
                           <button className="primary-action" onClick={() => { setModalError(''); setApprovalRequest(request); }}>
                             Approve & allocate

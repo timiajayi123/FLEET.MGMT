@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { CheckCircle2, X } from 'lucide-react';
 
 type SubmissionState =
   | { type: 'idle' }
@@ -248,14 +249,20 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
         </button>
       </footer>
 
-      <div aria-live="polite" aria-atomic="true">
-          {state.type === 'success' && (
-            <p className="alert success">
-            Vehicle request {state.requestNumber} was submitted and is pending approval.
-          </p>
-        )}
-        {state.type === 'error' && <p className="alert error">{state.message}</p>}
-      </div>
+      <div aria-live="polite" aria-atomic="true">{state.type === 'error' && <p className="alert error">{state.message}</p>}</div>
+      {state.type === 'success' && (
+        <div className="request-success-backdrop" role="presentation">
+          <section className="request-success-modal" role="dialog" aria-modal="true" aria-labelledby="request-success-title">
+            <button className="request-success-close" aria-label="Close success message" onClick={() => setState({ type: 'idle' })}><X size={18} /></button>
+            <div className="request-success-icon"><CheckCircle2 size={46} /></div>
+            <small>VEHICLE REQUEST SUBMITTED</small>
+            <h2 id="request-success-title">Request sent successfully</h2>
+            <p>Your vehicle request <strong>{state.requestNumber}</strong> has been submitted for fleet approval.</p>
+            <div className="request-success-status"><span>Current status</span><strong>Pending approval</strong></div>
+            <button className="primary-action" onClick={() => setState({ type: 'idle' })}>Okay, got it</button>
+          </section>
+        </div>
+      )}
     </form>
   );
 }
