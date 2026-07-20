@@ -153,7 +153,13 @@ export function LiveFleetMap() {
       }
       marker.setPosition(point);
       marker.setTitle(`${position.vehicle.registrationNumber} - ${position.driver.staffName}`);
-      marker.setLabel({ text: mapSpeedLabel(position.speed), color: '#ffffff', fontSize: '11px', fontWeight: '900' });
+      marker.setLabel({
+        text: mapSpeedLabel(position.speed),
+        color: '#0f172a',
+        fontSize: '11px',
+        fontWeight: '900',
+        className: 'vehicle-speed-label',
+      });
       marker.setIcon(vehicleMarkerIcon(maps, position));
     }
     markers.current.forEach((marker, id) => {
@@ -300,7 +306,7 @@ function color(status: Position['connectionStatus']) {
 }
 
 function mapSpeedLabel(speedMetresPerSecond?: number) {
-  if (typeof speedMetresPerSecond !== 'number' || !Number.isFinite(speedMetresPerSecond)) return '— km/h';
+  if (typeof speedMetresPerSecond !== 'number' || !Number.isFinite(speedMetresPerSecond)) return '0 km/h';
   return `${Math.max(0, Math.round(speedMetresPerSecond * 3.6))} km/h`;
 }
 
@@ -339,7 +345,7 @@ function vehicleMarkerIcon(maps: GoogleMapsNamespace, position: Position) {
       url: customUrl,
       scaledSize: new maps.Size(56, 56),
       anchor: new maps.Point(28, 28),
-      labelOrigin: new maps.Point(28, 12),
+      labelOrigin: new maps.Point(28, -8),
     };
   }
 
@@ -347,7 +353,7 @@ function vehicleMarkerIcon(maps: GoogleMapsNamespace, position: Position) {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(vehicleMarkerSvg(vehicleIconKind(position), color(position.connectionStatus)))}`,
     scaledSize: new maps.Size(64, 64),
     anchor: new maps.Point(32, 50),
-    labelOrigin: new maps.Point(32, 18),
+    labelOrigin: new maps.Point(32, -4),
   };
 }
 
@@ -397,7 +403,7 @@ function AdminSpeedCard({ speedMetresPerSecond, recordedAt }: { speedMetresPerSe
 }
 
 function popup(position: Position) {
-  return `<div class="google-map-popup"><strong>${escape(position.vehicle.registrationNumber)} - ${escape(position.vehicle.manufacturer)} ${escape(position.vehicle.model)}</strong><p><b>Vehicle icon:</b> ${vehicleIconLabel(vehicleIconKind(position))}${position.vehicle.vehicleType?.name ? ` (${escape(position.vehicle.vehicleType.name)})` : ''}</p><p><b>Driver:</b> ${escape(position.driver.staffName)} (${escape(position.driver.employeeId)})</p><p><b>Destination:</b> ${escape(position.allocation.destination ?? 'No destination')}</p><p><b>Speed:</b> ${Math.round((position.speed ?? 0) * 3.6)} km/h - <b>Accuracy:</b> ${Math.round(position.accuracy ?? 0)}m - <b>Status:</b> ${position.connectionStatus}${position.isSimulated ? ' - SIMULATED' : ''}</p><p>${escape(position.allocation.purpose)}</p></div>`;
+  return `<div class="google-map-popup"><strong>${escape(position.vehicle.registrationNumber)} - ${escape(position.vehicle.manufacturer)} ${escape(position.vehicle.model)}</strong><p><b>Vehicle icon:</b> ${vehicleIconLabel(vehicleIconKind(position))}${position.vehicle.vehicleType?.name ? ` (${escape(position.vehicle.vehicleType.name)})` : ''}</p><p><b>Driver:</b> ${escape(position.driver.staffName)} (${escape(position.driver.employeeId)})</p><p><b>Destination:</b> ${escape(position.allocation.destination ?? 'No destination')}</p><p class="google-map-speed"><b>Live speed</b> ${mapSpeedLabel(position.speed)}</p><p><b>Accuracy:</b> ${Math.round(position.accuracy ?? 0)}m - <b>Status:</b> ${position.connectionStatus}${position.isSimulated ? ' - SIMULATED' : ''}</p><p>${escape(position.allocation.purpose)}</p></div>`;
 }
 
 function escape(value: string) {
