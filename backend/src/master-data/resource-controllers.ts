@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -8,7 +9,12 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { MasterDataQueryDto, SaveMasterDataDto } from './dto/master-data.dto';
 import {
   DepartmentsService,
@@ -68,8 +74,21 @@ export class LocationsController extends ResourceController {
 }
 @Controller('vehicle-types')
 export class VehicleTypesController extends ResourceController {
-  constructor(service: VehicleTypesService) {
-    super(service);
+  constructor(private readonly vehicleTypes: VehicleTypesService) {
+    super(vehicleTypes);
+  }
+  @Post(':id/map-icon')
+  @UseInterceptors(FileInterceptor('mapIcon', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  async uploadMapIcon(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file || !['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.mimetype)) throw new BadRequestException('Upload a PNG, JPEG, WebP, or SVG icon up to 2 MB.');
+    return { data: await this.vehicleTypes.saveMapIcon(id, file) };
+  }
+  @Get(':id/map-icon')
+  async getMapIcon(@Param('id', ParseUUIDPipe) id: string, @Res() response: Response) {
+    const icon = await this.vehicleTypes.mapIcon(id);
+    response.setHeader('Content-Type', icon.mapIconMimeType!);
+    response.setHeader('Cache-Control', 'private, max-age=3600');
+    response.send(Buffer.from(icon.mapIconData!));
   }
 }
 @Controller('roles')

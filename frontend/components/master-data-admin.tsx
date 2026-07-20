@@ -155,7 +155,10 @@ export function MasterDataAdmin({
 
   async function saveRecord(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const body = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const formData = new FormData(event.currentTarget);
+    const mapIconFile = formData.get('mapIconFile');
+    formData.delete('mapIconFile');
+    const body = Object.fromEntries(formData.entries());
     setSaving(true);
     setError('');
     try {
@@ -168,8 +171,16 @@ export function MasterDataAdmin({
           body: JSON.stringify(body),
         },
       );
-      const payload = (await response.json()) as { message?: string | string[] };
+      const payload = (await response.json()) as { data?: { id: string }; message?: string | string[] };
       if (!response.ok) throw new Error(messageOf(payload.message, 'Unable to save record.'));
+      if (resource === 'vehicle-types' && mapIconFile instanceof File && mapIconFile.size) {
+        if (mapIconFile.size > 2 * 1024 * 1024) throw new Error('Map icon must not exceed 2 MB.');
+        const iconData = new FormData();
+        iconData.set('mapIcon', mapIconFile);
+        const iconResponse = await fetch(apiPath(`/vehicle-types/${payload.data?.id ?? selected?.id}/map-icon`), { method: 'POST', credentials: 'include', body: iconData });
+        const iconPayload = await iconResponse.json().catch(() => ({}));
+        if (!iconResponse.ok) throw new Error(messageOf(iconPayload.message, 'Vehicle Type was saved, but the map icon could not be uploaded.'));
+      }
       setModal(null);
       setSelected(null);
       showSuccess(`${config.singular} ${modal === 'edit' ? 'updated' : 'created'} successfully.`);
@@ -531,13 +542,9 @@ function RecordFormModal({
           )}
           {hasExtra(config, 'mapIcon') && (
             <label className="master-field">
-              <span>Map Icon</span>
-              <select name="mapIcon" defaultValue={record?.mapIcon ?? ''}>
-                <option value="">Use automatic vehicle icon</option>
-                <option value="/vehicle-icons/honda.png">Honda / Accord</option>
-                <option value="/vehicle-icons/hilux.svg">Toyota Hilux</option>
-              </select>
-              <small>This icon is shown for every live vehicle of this type.</small>
+              <span>Upload Map Icon</span>
+              <input name="mapIconFile" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+              <small>Choose an image from File Explorer. PNG, JPEG, WebP, or SVG; maximum 2 MB. It will be used for every live vehicle of this type.</small>
             </label>
           )}
           <label className="master-field">

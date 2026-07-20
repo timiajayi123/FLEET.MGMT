@@ -60,6 +60,8 @@ export class VehicleTypesService extends ResourceService {
   constructor(masterData: MasterDataService) {
     super(masterData);
   }
+  saveMapIcon(id: string, file: Express.Multer.File) { return this.masterData.saveVehicleTypeMapIcon(id, file); }
+  mapIcon(id: string) { return this.masterData.vehicleTypeMapIcon(id); }
 }
 @Injectable()
 export class RolesService extends ResourceService {

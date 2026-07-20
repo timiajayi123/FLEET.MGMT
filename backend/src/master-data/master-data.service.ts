@@ -254,6 +254,21 @@ export class MasterDataService {
     }
   }
 
+  async saveVehicleTypeMapIcon(id: string, file: Express.Multer.File) {
+    await this.prisma.vehicleType.findUniqueOrThrow({ where: { id } });
+    return this.prisma.vehicleType.update({
+      where: { id },
+      data: { mapIcon: null, mapIconMimeType: file.mimetype, mapIconData: Uint8Array.from(file.buffer) },
+      select: { id: true, name: true, mapIconMimeType: true, updatedAt: true },
+    });
+  }
+
+  async vehicleTypeMapIcon(id: string) {
+    const type = await this.prisma.vehicleType.findUnique({ where: { id }, select: { mapIconMimeType: true, mapIconData: true } });
+    if (!type?.mapIconData || !type.mapIconMimeType) throw new NotFoundException('No uploaded map icon exists for this vehicle type.');
+    return type;
+  }
+
   private findById(resource: MasterDataResource, id: string) {
     switch (resource) {
       case 'directorates':

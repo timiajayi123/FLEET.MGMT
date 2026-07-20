@@ -20,7 +20,7 @@ type Position = {
   isSimulated: boolean;
   connectionStatus: 'MOVING' | 'STATIONARY' | 'STALE' | 'OFFLINE';
   driver: { staffName: string; employeeId: string; phone: string };
-  vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; vehicleType?: { name: string; mapIcon?: string | null } };
+  vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; vehicleType?: { id: string; name: string; mapIcon?: string | null; mapIconMimeType?: string | null } };
   trip: { id: string; status: string };
   allocation: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string; unit: string } };
 };
@@ -351,8 +351,9 @@ function vehicleMarkerIcon(maps: GoogleMapsNamespace, position: Position) {
 }
 
 function customVehicleIconUrl(position: Position) {
-  const configuredIcon = position.vehicle.vehicleType?.mapIcon;
-  if (configuredIcon) return configuredIcon;
+  const vehicleType = position.vehicle.vehicleType;
+  if (vehicleType?.mapIconMimeType) return `/api/vehicle-types/${vehicleType.id}/map-icon`;
+  if (vehicleType?.mapIcon) return vehicleType.mapIcon;
   const text = [
     position.vehicle.vehicleType?.name,
     position.vehicle.manufacturer,

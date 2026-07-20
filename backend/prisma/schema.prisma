@@ -93,6 +93,8 @@ model VehicleType {
   description       String?
   passengerCapacity Int?
   mapIcon           String?          @db.NVarChar(300)
+  mapIconMimeType   String?          @db.NVarChar(100)
+  mapIconData       Bytes?
   status            String           @default("ACTIVE")
   sortOrder         Int              @default(0)
   requests          VehicleRequest[]
