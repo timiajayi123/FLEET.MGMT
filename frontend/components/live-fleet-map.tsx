@@ -153,7 +153,7 @@ export function LiveFleetMap() {
       }
       marker.setPosition(point);
       marker.setTitle(`${position.vehicle.registrationNumber} - ${position.driver.staffName}`);
-      marker.setLabel({ text: shortReg(position.vehicle.registrationNumber), color: '#ffffff', fontSize: '11px', fontWeight: '900' });
+      marker.setLabel({ text: mapSpeedLabel(position.speed), color: '#ffffff', fontSize: '11px', fontWeight: '900' });
       marker.setIcon(vehicleMarkerIcon(maps, position));
     }
     markers.current.forEach((marker, id) => {
@@ -299,8 +299,9 @@ function color(status: Position['connectionStatus']) {
   return '#334155';
 }
 
-function shortReg(value: string) {
-  return value.replace(/[^a-z0-9]/gi, '').slice(-4).toUpperCase() || 'GPS';
+function mapSpeedLabel(speedMetresPerSecond?: number) {
+  if (typeof speedMetresPerSecond !== 'number' || !Number.isFinite(speedMetresPerSecond)) return '— km/h';
+  return `${Math.max(0, Math.round(speedMetresPerSecond * 3.6))} km/h`;
 }
 
 function vehicleIconKind(position: Position): VehicleIconKind {

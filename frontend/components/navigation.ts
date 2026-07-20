@@ -129,7 +129,13 @@ export function visibleNavigation(roleCode?: string) {
   return navigation
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => canAccessNavigationItem(item, roleCode)),
+      items: group.items
+        .filter((item) => canAccessNavigationItem(item, roleCode))
+        .map((item) =>
+          roleCode === 'DRIVER' && item.href === '/operations/gps-tracking'
+            ? { ...item, label: 'Trip Start' }
+            : item,
+        ),
     }))
     .filter((group) => group.items.length > 0);
 }

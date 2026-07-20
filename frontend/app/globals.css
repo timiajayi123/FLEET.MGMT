@@ -774,6 +774,7 @@ button {
 .request-success-modal h2 { margin: 5px 0 10px; }.request-success-modal p { margin: 0; color: var(--text-soft); line-height: 1.6; }.request-success-status { display: flex; justify-content: space-between; margin: 22px 0; padding: 12px 14px; border-radius: 10px; background: var(--surface-soft); text-align: left; }.request-success-status span { color: var(--text-soft); }.request-success-status strong { color: #15966a; }
 @media (max-width: 640px) { .trip-replay-modal { padding: 15px; } .trip-replay-modal > header { flex-direction: column; } .trip-replay-modal > footer span { width: 100%; margin-left: 0; } }
 @media (max-width: 640px) { .assistant-input { flex-direction: column; } .assistant-input button { width: 100%; } }
+.tracking-minimise{display:grid;width:2rem;height:2rem;margin-left:auto;place-items:center;border:1px solid var(--border);border-radius:.55rem;background:var(--surface-soft);color:var(--text)}.tracking-card.minimised{padding:.7rem 1rem}.tracking-card.minimised .tracking-title p{display:none}.trip-speed-pill{display:inline-flex;margin:0 0 0 2.8rem;padding:.35rem .6rem;border:0;border-radius:999px;background:#13875b;color:#fff;font-size:.72rem;font-weight:900}
 .empty-compact {
   display: flex;
   min-height: 13.7rem;
