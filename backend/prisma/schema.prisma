@@ -326,43 +326,49 @@ model Session {
 }
 
 model VehicleRequest {
-  id                  String              @id @default(uuid()) @db.UniqueIdentifier
-  requestNumber       String              @unique
-  staffName           String
-  employeeId          String
-  locationId          String              @db.UniqueIdentifier
-  directorateId       String              @db.UniqueIdentifier
-  departmentId        String              @db.UniqueIdentifier
-  unitId              String              @db.UniqueIdentifier
-  vehicleTypeId       String              @db.UniqueIdentifier
-  requesterId         String?             @db.UniqueIdentifier
-  location            String
-  directorate         String
-  department          String
-  unit                String
-  purposeOfTrip       String
-  vehicleTypeName     String
-  destination         String
-  departureDate       DateTime            @db.DateTime2
-  expectedReturnDate  DateTime            @db.DateTime2
-  numberOfPassengers  Int
-  priority            String
-  remarks             String?
-  attachmentFileName  String?
-  attachmentMimeType  String?
-  attachmentSizeBytes Int?
-  attachmentData      Bytes?
-  status              String              @default("PENDING_APPROVAL")
-  locationMaster      Location            @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  directorateMaster   Directorate         @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  departmentMaster    Department          @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unitMaster          Unit                @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  vehicleTypeMaster   VehicleType         @relation(fields: [vehicleTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  requester           User?               @relation(fields: [requesterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  allocations         VehicleAllocation[]
-  trips               Trip[]
-  createdAt           DateTime            @default(now()) @db.DateTime2
-  updatedAt           DateTime            @updatedAt @db.DateTime2
+  id                   String              @id @default(uuid()) @db.UniqueIdentifier
+  requestNumber        String              @unique
+  staffName            String
+  employeeId           String
+  locationId           String?             @db.UniqueIdentifier
+  directorateId        String              @db.UniqueIdentifier
+  departmentId         String?             @db.UniqueIdentifier
+  unitId               String?             @db.UniqueIdentifier
+  vehicleTypeId        String              @db.UniqueIdentifier
+  requesterId          String?             @db.UniqueIdentifier
+  location             String
+  directorate          String
+  department           String
+  unit                 String
+  purposeOfTrip        String
+  tripCategory         String?             @db.NVarChar(30)
+  legacyPurposeOfTrip  String?             @db.NVarChar(2000)
+  vehicleTypeName      String
+  destination          String
+  customPickupLocation String?             @db.NVarChar(300)
+  customDestination    String?             @db.NVarChar(300)
+  customDepartment     String?             @db.NVarChar(200)
+  customUnit           String?             @db.NVarChar(200)
+  departureDate        DateTime            @db.DateTime2
+  expectedReturnDate   DateTime            @db.DateTime2
+  numberOfPassengers   Int
+  priority             String
+  remarks              String?
+  attachmentFileName   String?
+  attachmentMimeType   String?
+  attachmentSizeBytes  Int?
+  attachmentData       Bytes?
+  status               String              @default("PENDING_APPROVAL")
+  locationMaster       Location?           @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  directorateMaster    Directorate         @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departmentMaster     Department?         @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unitMaster           Unit?               @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vehicleTypeMaster    VehicleType         @relation(fields: [vehicleTypeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requester            User?               @relation(fields: [requesterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  allocations          VehicleAllocation[]
+  trips                Trip[]
+  createdAt            DateTime            @default(now()) @db.DateTime2
+  updatedAt            DateTime            @updatedAt @db.DateTime2
 
   @@index([status, departureDate])
   @@index([employeeId, createdAt])
@@ -372,6 +378,7 @@ model VehicleRequest {
   @@index([unitId])
   @@index([vehicleTypeId])
   @@index([requesterId])
+  @@index([tripCategory, departureDate])
   @@map("vehicle_requests")
 }
 

@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
         </div>
         <div className="auth-message">
           <span>Enterprise Fleet Operations</span>
-          <h1>Accountable mobility for public service.</h1>
+          <h1>Automated Fleet Management System</h1>
           <p>
             One secure platform for transport requests, fleet operations, compliance, and insight.
           </p>

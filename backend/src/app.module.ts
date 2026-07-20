@@ -14,6 +14,8 @@ import { GpsModule } from './gps/gps.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { HealthModule } from './health/health.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { HealthModule } from './health/health.module';
     GeocodingModule,
     TrackingModule,
     HealthModule,
+    AnalyticsModule,
+    AiModule,
   ],
 })
 export class AppModule {}

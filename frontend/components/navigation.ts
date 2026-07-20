@@ -43,7 +43,7 @@ export const navigation: NavigationGroup[] = [
       { label: 'Vehicles', href: '/fleet/vehicles', icon: CarFront, roles: ['S_ADMIN', 'FM'] },
       { label: 'Drivers', href: '/fleet/drivers', icon: Users, roles: ['S_ADMIN', 'FM'] },
       {
-        label: 'Request Vehicle',
+        label: 'Vehicle Request Form',
         href: '/fleet/vehicle-requests/new',
         icon: ClipboardList,
         roles: ['ST'],

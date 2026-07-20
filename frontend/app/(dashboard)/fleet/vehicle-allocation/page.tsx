@@ -3,7 +3,7 @@
 import { PageHeader } from '@/components/page-header';
 import { apiMessage, readApiJson } from '@/lib/api-response';
 import { Pencil, Trash2 } from 'lucide-react';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 type Vehicle = { id: string; registrationNumber: string; manufacturer: string; model: string; status: string };
 type Driver = { id: string; staffName: string; employeeId: string; status: string };

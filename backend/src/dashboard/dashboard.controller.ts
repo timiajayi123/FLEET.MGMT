@@ -7,7 +7,7 @@ import { DashboardService } from './dashboard.service';
 export class DashboardController {
   constructor(private readonly dashboard: DashboardService, private readonly auth: AuthService) {}
   @Get() async get(@Req() req: Request, @Query('days') days?: string) {
-    const value = days === '90' ? 90 : 30;
+    const value = [7, 30, 90, 365].includes(Number(days)) ? Number(days) : 30;
     return this.dashboard.summary(await requireUser(this.auth, req), value);
   }
 }

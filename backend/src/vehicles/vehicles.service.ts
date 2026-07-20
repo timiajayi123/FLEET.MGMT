@@ -217,6 +217,7 @@ export class VehiclesService {
         summary: {
           requested: uniqueIds.length,
           deleted: deletedVehicles.count,
+          linkedDriversDeleted: deletedDrivers.count,
           blocked: 0,
           missing: missing.length,
         },

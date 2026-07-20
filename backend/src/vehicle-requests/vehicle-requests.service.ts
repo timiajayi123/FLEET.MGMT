@@ -53,25 +53,24 @@ export class VehicleRequestsService {
     }
 
     const [location, directorate, department, unit, vehicleType] = await Promise.all([
-      this.prisma.location.findFirst({
-        where: { id: dto.locationId, status: MasterDataStatus.ACTIVE },
-      }),
+      dto.locationId ? this.prisma.location.findFirst({ where: { id: dto.locationId, status: MasterDataStatus.ACTIVE } }) : null,
       this.prisma.directorate.findFirst({
         where: { id: dto.directorateId, status: MasterDataStatus.ACTIVE },
       }),
-      this.prisma.department.findFirst({
-        where: { id: dto.departmentId, status: MasterDataStatus.ACTIVE },
-      }),
-      this.prisma.unit.findFirst({ where: { id: dto.unitId, status: MasterDataStatus.ACTIVE } }),
+      dto.departmentId ? this.prisma.department.findFirst({ where: { id: dto.departmentId, status: MasterDataStatus.ACTIVE } }) : null,
+      dto.unitId ? this.prisma.unit.findFirst({ where: { id: dto.unitId, status: MasterDataStatus.ACTIVE } }) : null,
       this.prisma.vehicleType.findFirst({
         where: { id: dto.vehicleTypeId, status: MasterDataStatus.ACTIVE },
       }),
     ]);
 
-    if (!location || !directorate || !department || !unit || !vehicleType) {
+    if (!directorate || !vehicleType || (dto.locationId && !location) || (dto.departmentId && !department) || (dto.unitId && !unit)) {
       throw new BadRequestException('One or more selected master-data records are unavailable.');
     }
-    if (department.directorateId !== directorate.id || unit.departmentId !== department.id) {
+    if (department && department.directorateId !== directorate.id) {
+      throw new BadRequestException('The selected department does not match the directorate.');
+    }
+    if (unit && (!department || unit.departmentId !== department.id)) {
       throw new BadRequestException('The selected directorate, department, and unit do not match.');
     }
 
@@ -81,18 +80,23 @@ export class VehicleRequestsService {
         requesterId,
         staffName: dto.staffName,
         employeeId: dto.employeeId,
-        locationId: location.id,
+        locationId: location?.id,
         directorateId: directorate.id,
-        departmentId: department.id,
-        unitId: unit.id,
+        departmentId: department?.id,
+        unitId: unit?.id,
         vehicleTypeId: vehicleType.id,
-        location: location.name,
+        location: location?.name ?? dto.customPickupLocation!,
         directorate: directorate.name,
-        department: department.name,
-        unit: unit.name,
+        department: department?.name ?? dto.customDepartment!,
+        unit: unit?.name ?? dto.customUnit!,
         purposeOfTrip: dto.purposeOfTrip,
+        tripCategory: dto.purposeOfTrip,
         vehicleTypeName: vehicleType.name,
         destination: dto.destination,
+        customPickupLocation: dto.customPickupLocation || null,
+        customDestination: dto.customDestination || null,
+        customDepartment: dto.customDepartment || null,
+        customUnit: dto.customUnit || null,
         departureDate,
         expectedReturnDate,
         numberOfPassengers: dto.numberOfPassengers,

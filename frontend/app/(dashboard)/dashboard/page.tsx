@@ -98,15 +98,15 @@ function StaffDashboard({ data }: { data: DashboardData }) {
 
   useEffect(() => {
     if (!actionableRequest) {
-      setVisibleRequestId(null);
+      queueMicrotask(() => setVisibleRequestId(null));
       return;
     }
     const key = `staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`;
     if (window.localStorage.getItem(key)) {
-      setVisibleRequestId(null);
+      queueMicrotask(() => setVisibleRequestId(null));
       return;
     }
-    setVisibleRequestId(actionableRequest.id);
+    queueMicrotask(() => setVisibleRequestId(actionableRequest.id));
   }, [actionableRequest]);
 
   function dismissRequestModal() {
@@ -236,12 +236,12 @@ function MetricGrid({ metrics }: { metrics: { label: string; value: number | str
 }
 
 function DashboardPanels({ data, days, setDays, queueTitle, queueDescription }: { data: DashboardData | null; days: number; setDays: (days: number) => void; queueTitle: string; queueDescription: string }) {
-  return <section className="dashboard-grid"><ActivityPanel data={data} days={days} setDays={setDays} title="Fleet activity" description="Pool vehicle requests submitted over time." /><article className="panel"><div className="panel-heading"><div><h2>{queueTitle}</h2><p>{queueDescription}</p></div></div>{data?.approvalQueue.length ? <div className="notification-list">{data.approvalQueue.map((x) => <div className="notification-item" key={x.id}><span><strong>{x.requestNumber}</strong><small>{x.staffName} · {x.destination}</small></span></div>)}</div> : <Empty icon={<CheckCircle2 size={28} />} title="No pending requests" text="New pending approvals will appear here." />}</article></section>;
+  return <section className="dashboard-grid"><ActivityPanel data={data} days={days} setDays={setDays} title="Fleet Activity Timeline" description="Vehicle request activity over the selected period." /><article className="panel"><div className="panel-heading"><div><h2>{queueTitle}</h2><p>{queueDescription}</p></div></div>{data?.approvalQueue.length ? <div className="notification-list">{data.approvalQueue.map((x) => <div className="notification-item" key={x.id}><span><strong>{x.requestNumber}</strong><small>{x.staffName} · {x.destination}</small></span></div>)}</div> : <Empty icon={<CheckCircle2 size={28} />} title="No pending requests" text="New pending approvals will appear here." />}</article></section>;
 }
 
 function ActivityPanel({ data, days, setDays, title, description }: { data: DashboardData | null; days: number; setDays: (days: number) => void; title: string; description: string }) {
   const max = useMemo(() => Math.max(1, ...(data?.activity.map((x) => x.count) ?? [])), [data]);
-  return <article className="panel chart-panel"><div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><select value={days} onChange={(e) => setDays(Number(e.target.value))}><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></div>{data?.activity.some((x) => x.count > 0) ? <><div className="chart-placeholder">{data.activity.map((x) => <span key={x.date} title={`${x.date}: ${x.count}`} style={{ height: `${Math.max(4, (x.count / max) * 100)}%` }} />)}</div><div className="chart-axis"><span>{data.activity[0]?.date}</span><span>{data.activity.at(-1)?.date}</span></div></> : <Empty icon={<Activity size={28} />} title="No request activity yet" text="The graph will populate when requests are submitted." />}</article>;
+  return <article className="panel chart-panel"><div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><select value={days} onChange={(e) => setDays(Number(e.target.value))}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">This year</option></select></div>{data?.activity.some((x) => x.count > 0) ? <><div className="chart-placeholder">{data.activity.map((x) => <span key={x.date} title={`${x.date}: ${x.count} vehicle request(s)`} aria-label={`${x.date}: ${x.count} vehicle request(s)`} style={{ height: `${Math.max(4, (x.count / max) * 100)}%` }} />)}</div><div className="chart-axis"><span>{data.activity[0]?.date}</span><span>{data.activity.at(-1)?.date}</span></div></> : <Empty icon={<Activity size={28} />} title="No request activity yet" text="The timeline will populate when requests are submitted." />}</article>;
 }
 
 function Empty({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {

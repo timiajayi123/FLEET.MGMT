@@ -15,7 +15,10 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
   const [state, setState] = useState<SubmissionState>({ type: 'idle' });
   const [directorateId, setDirectorateId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
-  const [unitId, setUnitId] = useState('');
+  const [locationValue, setLocationValue] = useState('');
+  const [departmentValue, setDepartmentValue] = useState('');
+  const [unitValue, setUnitValue] = useState('');
+  const [destinationValue, setDestinationValue] = useState('');
   const [profile, setProfile] = useState<{ staffName: string; employeeId: string; directorateId?: string; departmentId?: string; unitId?: string } | null>(null);
   const directorates = useMasterOptions('directorates');
   const departments = useMasterOptions('departments', directorateId, Boolean(directorateId));
@@ -29,7 +32,6 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       setProfile(payload.user);
       setDirectorateId(payload.user.directorateId ?? '');
       setDepartmentId(payload.user.departmentId ?? '');
-      setUnitId(payload.user.unitId ?? '');
     }).catch(() => undefined);
   }, []);
 
@@ -40,6 +42,8 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
     if (!form.reportValidity()) return;
 
     const formData = new FormData(form);
+    const destinationMatch = locations.options.find((option) => option.name.toLocaleLowerCase() === destinationValue.trim().toLocaleLowerCase());
+    formData.set('customDestination', destinationMatch ? '' : destinationValue.trim());
     const departureDate = String(formData.get('departureDate'));
     const expectedReturnDate = String(formData.get('expectedReturnDate'));
 
@@ -81,7 +85,10 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       form.reset();
       setDirectorateId('');
       setDepartmentId('');
-      setUnitId('');
+      setLocationValue('');
+      setDepartmentValue('');
+      setUnitValue('');
+      setDestinationValue('');
       setState({ type: 'success', requestNumber: payload.requestNumber });
     } catch (error) {
       setState({
@@ -108,11 +115,14 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
         <div className="field-grid">
           <Field label="Staff Name" name="staffName" minLength={2} maxLength={150} value={profile?.staffName} readOnly={Boolean(profile)} />
           <Field label="Employee ID" name="employeeId" maxLength={50} value={profile?.employeeId} readOnly={Boolean(profile)} />
-          <MasterSelect
+          <CreatableMasterField
             label="Location"
-            name="locationId"
             options={locations.options}
             loading={locations.loading}
+            value={locationValue}
+            onChange={(value) => setLocationValue(value)}
+            idName="locationId"
+            customName="customPickupLocation"
           />
           <MasterSelect
             label="Directorate"
@@ -123,29 +133,31 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             onChange={(value) => {
               setDirectorateId(value);
               setDepartmentId('');
-              setUnitId('');
             }}
           />
-          <MasterSelect
+          <CreatableMasterField
             label="Department"
-            name="departmentId"
             options={departments.options}
             loading={departments.loading}
-            disabled={!directorateId}
-            value={departmentId}
-            onChange={(value) => {
-              setDepartmentId(value);
-              setUnitId('');
+            value={departmentValue}
+            idName="departmentId"
+            customName="customDepartment"
+            onChange={(value, id) => {
+              setDepartmentValue(value);
+              setDepartmentId(id);
+              setUnitValue('');
             }}
           />
-          <MasterSelect
+          <CreatableMasterField
             label="Unit"
-            name="unitId"
             options={units.options}
             loading={units.loading}
-            disabled={!departmentId}
-            value={unitId}
-            onChange={setUnitId}
+            value={unitValue}
+            idName="unitId"
+            customName="customUnit"
+            onChange={(value) => {
+              setUnitValue(value);
+            }}
           />
         </div>
       </section>
@@ -161,7 +173,12 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
         <div className="field-grid">
           <label className="field field-wide">
             <span>Purpose of Trip</span>
-            <textarea name="purposeOfTrip" required minLength={5} maxLength={2000} rows={4} />
+            <select name="purposeOfTrip" required defaultValue="">
+              <option value="" disabled>Select trip purpose</option>
+              <option value="Official">Official</option>
+              <option value="Non-Official">Non-Official</option>
+            </select>
+            <small>Select whether this vehicle request is for official business.</small>
           </label>
           <label className="field">
             <span>Vehicle Type</span>
@@ -174,7 +191,11 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
           </label>
           <label className="field">
             <span>Destination</span>
-            <LocationNameSelect name="destination" options={locations.options} loading={locations.loading} />
+            <input name="destination" list="vehicle-request-destinations" value={destinationValue} onChange={(event) => setDestinationValue(event.target.value)} required minLength={2} maxLength={300} placeholder="Select a registered location or type a destination" disabled={locations.loading} />
+            <datalist id="vehicle-request-destinations">
+              {locations.options.map((option) => <option key={option.id} value={option.name}>{option.code}</option>)}
+            </datalist>
+            <small>You may select a registered location or enter a new destination.</small>
           </label>
           <Field label="Departure Date" name="departureDate" type="datetime-local" />
           <Field label="Expected Return Date" name="expectedReturnDate" type="datetime-local" />
@@ -228,9 +249,9 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       </footer>
 
       <div aria-live="polite" aria-atomic="true">
-        {state.type === 'success' && (
-          <p className="alert success">
-            Request {state.requestNumber} was submitted and is pending approval.
+          {state.type === 'success' && (
+            <p className="alert success">
+            Vehicle request {state.requestNumber} was submitted and is pending approval.
           </p>
         )}
         {state.type === 'error' && <p className="alert error">{state.message}</p>}
@@ -370,11 +391,42 @@ function MasterSelectControl({
   );
 }
 
-function LocationNameSelect({ name, options, loading }: { name: string; options: MasterOption[]; loading: boolean }) {
+function CreatableMasterField({
+  label,
+  options,
+  loading,
+  value,
+  onChange,
+  idName,
+  customName,
+}: {
+  label: string;
+  options: MasterOption[];
+  loading: boolean;
+  value: string;
+  onChange: (value: string, id: string) => void;
+  idName: string;
+  customName: string;
+}) {
+  const listId = `vehicle-request-${idName}`;
   return (
-    <select name={name} required disabled={loading} defaultValue="">
+    <>
+      <label className="field">
+        <span>{label}</span>
+        <input list={listId} value={value} onChange={(event) => {
+          const next = event.target.value;
+          const match = options.find((option) => option.name.toLocaleLowerCase() === next.trim().toLocaleLowerCase());
+          onChange(next, match?.id ?? '');
+        }} placeholder={loading ? 'Loading…' : `Select a saved ${label.toLowerCase()} or type one`} required minLength={2} maxLength={label === 'Location' ? 300 : 200} disabled={loading} />
+        <input type="hidden" name={idName} value={options.find((option) => option.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase())?.id ?? ''} />
+        <input type="hidden" name={customName} value={options.some((option) => option.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase()) ? '' : value.trim()} />
+        <datalist id={listId}>{options.map((option) => <option key={option.id} value={option.name}>{option.code}</option>)}</datalist>
+        <small>Select an existing record or type a new value without creating master data.</small>
+      </label>
+    <select name={`legacy-${idName}`} aria-hidden="true" tabIndex={-1} style={{ display: 'none' }} disabled>
       <option value="" disabled>{loading ? 'Loading…' : 'Select destination'}</option>
       {options.map((option) => <option key={option.id} value={option.name}>{option.name} ({option.code})</option>)}
     </select>
+    </>
   );
 }

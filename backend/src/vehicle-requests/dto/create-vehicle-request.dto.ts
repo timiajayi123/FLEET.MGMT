@@ -2,11 +2,13 @@ import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  ValidateIf,
   Length,
   Max,
   MaxLength,
@@ -30,22 +32,49 @@ export class CreateVehicleRequestDto {
   @MaxLength(50)
   employeeId!: string;
 
+  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.customPickupLocation)
   @IsUUID()
-  locationId!: string;
+  @IsOptional()
+  locationId?: string;
+
+  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.locationId)
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(300)
+  customPickupLocation?: string;
 
   @IsUUID()
   directorateId!: string;
 
+  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.customDepartment)
   @IsUUID()
-  departmentId!: string;
+  @IsOptional()
+  departmentId?: string;
 
+  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.departmentId)
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  customDepartment?: string;
+
+  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.customUnit)
   @IsUUID()
-  unitId!: string;
+  @IsOptional()
+  unitId?: string;
+
+  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.unitId)
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  customUnit?: string;
 
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
-  @Length(5, 2000)
+  @IsIn(['Official', 'Non-Official'])
   purposeOfTrip!: string;
 
   @IsUUID()
@@ -56,6 +85,12 @@ export class CreateVehicleRequestDto {
   @IsNotEmpty()
   @MaxLength(300)
   destination!: string;
+
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  customDestination?: string;
 
   @IsDateString({ strict: true })
   departureDate!: string;
