@@ -92,6 +92,7 @@ model VehicleType {
   name              String           @unique
   description       String?
   passengerCapacity Int?
+  mapIcon           String?          @db.NVarChar(300)
   status            String           @default("ACTIVE")
   sortOrder         Int              @default(0)
   requests          VehicleRequest[]

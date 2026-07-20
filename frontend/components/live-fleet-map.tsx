@@ -20,7 +20,7 @@ type Position = {
   isSimulated: boolean;
   connectionStatus: 'MOVING' | 'STATIONARY' | 'STALE' | 'OFFLINE';
   driver: { staffName: string; employeeId: string; phone: string };
-  vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; vehicleType?: { name: string } };
+  vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; vehicleType?: { name: string; mapIcon?: string | null } };
   trip: { id: string; status: string };
   allocation: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string; unit: string } };
 };
@@ -351,6 +351,8 @@ function vehicleMarkerIcon(maps: GoogleMapsNamespace, position: Position) {
 }
 
 function customVehicleIconUrl(position: Position) {
+  const configuredIcon = position.vehicle.vehicleType?.mapIcon;
+  if (configuredIcon) return configuredIcon;
   const text = [
     position.vehicle.vehicleType?.name,
     position.vehicle.manufacturer,
@@ -358,6 +360,7 @@ function customVehicleIconUrl(position: Position) {
   ].filter(Boolean).join(' ').toLowerCase();
 
   if (text.includes('hilux')) return '/vehicle-icons/hilux.svg';
+  if (text.includes('honda') || text.includes('accord') || text.includes('civic')) return '/vehicle-icons/honda.png';
   return '';
 }
 

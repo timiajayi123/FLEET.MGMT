@@ -72,6 +72,12 @@ export class SaveMasterDataDto {
   @Max(500)
   passengerCapacity?: number;
 
+  @Transform(trim)
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  mapIcon?: string;
+
   @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
   @IsOptional()
   @IsBoolean()

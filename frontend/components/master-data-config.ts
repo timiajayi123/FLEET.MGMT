@@ -30,7 +30,7 @@ export const masterDataResources = {
     title: 'Vehicle Types',
     singular: 'Vehicle Type',
     description: 'Manage requestable vehicle classifications and passenger capacities.',
-    extraFields: ['passengerCapacity'],
+    extraFields: ['passengerCapacity', 'mapIcon'],
   },
   roles: {
     title: 'Roles',

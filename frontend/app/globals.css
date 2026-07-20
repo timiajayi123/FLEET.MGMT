@@ -753,6 +753,14 @@ button {
 .report-table-wrap { overflow-x: auto; }
 .report-table-wrap table { width: 100%; border-collapse: collapse; min-width: 850px; }
 .report-table-wrap th, .report-table-wrap td { text-align: left; vertical-align: top; padding: 11px 10px; border-bottom: 1px solid var(--line, #e4ebe7); }
+.trip-card-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.trip-replay-modal { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; border-radius: 18px; background: white; padding: 20px; }
+.trip-replay-modal > header { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.trip-replay-modal h2, .trip-replay-modal p { margin: 4px 0; }
+.trip-replay-map { height: min(58vh, 560px); min-height: 310px; margin: 18px 0; border-radius: 12px; overflow: hidden; background: #e9f0ec; }
+.trip-replay-modal > footer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.trip-replay-modal > footer span { margin-left: auto; color: #51635a; font-size: .86rem; }
+@media (max-width: 640px) { .trip-replay-modal { padding: 15px; } .trip-replay-modal > header { flex-direction: column; } .trip-replay-modal > footer span { width: 100%; margin-left: 0; } }
 @media (max-width: 640px) { .assistant-input { flex-direction: column; } .assistant-input button { width: 100%; } }
 .empty-compact {
   display: flex;

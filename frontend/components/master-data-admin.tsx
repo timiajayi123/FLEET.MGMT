@@ -37,6 +37,7 @@ type RecordItem = {
   address?: string | null;
   state?: string | null;
   passengerCapacity?: number | null;
+  mapIcon?: string | null;
   isSystemRole?: boolean;
 };
 type Meta = {
@@ -527,6 +528,17 @@ function RecordFormModal({
               min={1}
               defaultValue={record?.passengerCapacity ?? ''}
             />
+          )}
+          {hasExtra(config, 'mapIcon') && (
+            <label className="master-field">
+              <span>Map Icon</span>
+              <select name="mapIcon" defaultValue={record?.mapIcon ?? ''}>
+                <option value="">Use automatic vehicle icon</option>
+                <option value="/vehicle-icons/honda.png">Honda / Accord</option>
+                <option value="/vehicle-icons/hilux.svg">Toyota Hilux</option>
+              </select>
+              <small>This icon is shown for every live vehicle of this type.</small>
+            </label>
           )}
           <label className="master-field">
             <span>Status</span>

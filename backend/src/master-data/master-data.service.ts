@@ -183,7 +183,7 @@ export class MasterDataService {
         case 'vehicle-types':
           return await this.prisma.vehicleType.update({
             where: { id },
-            data: { ...data, passengerCapacity: dto.passengerCapacity ?? null },
+            data: { ...data, passengerCapacity: dto.passengerCapacity ?? null, mapIcon: dto.mapIcon || null },
           });
         case 'roles': {
           const existing = await this.prisma.role.findUniqueOrThrow({ where: { id } });
@@ -311,7 +311,7 @@ export class MasterDataService {
         });
       case 'vehicle-types':
         return this.prisma.vehicleType.create({
-          data: { ...data, passengerCapacity: dto.passengerCapacity ?? null },
+          data: { ...data, passengerCapacity: dto.passengerCapacity ?? null, mapIcon: dto.mapIcon || null },
         });
       case 'roles':
         return this.prisma.role.create({
