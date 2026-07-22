@@ -12,9 +12,3 @@ export type FleetAssistantContext = {
   userId: string;
   role: string;
 };
-
-export interface FleetAssistantProvider {
-  readonly name: 'builtin' | 'openai';
-  isAvailable(): boolean;
-  ask(message: string, context: FleetAssistantContext): Promise<FleetAssistantResponse>;
-}

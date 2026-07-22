@@ -5,5 +5,4 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { AiRateLimitService } from './ai-rate-limit.service';
 import { BuiltinFleetAssistantProvider } from './builtin-fleet-assistant.provider';
-import { OpenAiFleetAssistantProvider } from './openai-fleet-assistant.provider';
-@Module({ imports: [AuthModule, AnalyticsModule], controllers: [AiController], providers: [AiService, AiRateLimitService, BuiltinFleetAssistantProvider, OpenAiFleetAssistantProvider] }) export class AiModule {}
+@Module({ imports: [AuthModule, AnalyticsModule], controllers: [AiController], providers: [AiService, AiRateLimitService, BuiltinFleetAssistantProvider] }) export class AiModule {}

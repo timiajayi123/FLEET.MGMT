@@ -1,20 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
-import type { FleetAssistantContext, FleetAssistantProvider, FleetAssistantResponse } from './fleet-assistant.provider';
+import type { FleetAssistantContext, FleetAssistantResponse } from './fleet-assistant.provider';
 
 @Injectable()
-export class BuiltinFleetAssistantProvider implements FleetAssistantProvider {
-  readonly name = 'builtin' as const;
+export class BuiltinFleetAssistantProvider {
   constructor(private readonly analytics: AnalyticsService, private readonly prisma: PrismaService) {}
-  isAvailable() { return true; }
-
   async ask(message: string, context: FleetAssistantContext): Promise<FleetAssistantResponse> {
     void context;
-    const question = message.trim().toLocaleLowerCase();
+    const question = message.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
     const dashboard = await this.analytics.dashboard({ from: daysAgo(question.includes('week') ? 7 : 30) });
     if (/last|latest|recent/.test(question) && /trip/.test(question)) return this.latestTrip();
     if (/pending|awaiting/.test(question) && /request/.test(question)) return this.pendingRequests();
+    if (/(approved|allocated|assigned)/.test(question) && /request/.test(question)) return response('Approved transport requests', `${dashboard.metrics.approvedRequests} request${dashboard.metrics.approvedRequests === 1 ? '' : 's'} are approved or allocated in the selected period.`, [{ label: 'Approved or allocated', value: String(dashboard.metrics.approvedRequests) }], { label: 'Review requests', href: '/fleet/vehicle-requests/review' });
+    if (/active|ongoing|in progress/.test(question) && /trip/.test(question)) return response('Active trips', `${dashboard.metrics.activeTrips} request-backed trip${dashboard.metrics.activeTrips === 1 ? ' is' : 's are'} currently active.`, [{ label: 'Active trips', value: String(dashboard.metrics.activeTrips) }], { label: 'Open live tracking', href: '/operations/gps-tracking' });
     if (/report|export|download/.test(question)) return response('Vehicle request report', 'Open the reports workspace to filter, review and export live vehicle-request records as CSV.', [{ label: 'Available report', value: 'Vehicle requests' }, { label: 'Live records', value: String(dashboard.metrics.requests) }], { label: 'Open reports', href: '/analytics/reports' });
     if (/completed|complete/.test(question) && /trip/.test(question)) return response('Completed trips', `${dashboard.metrics.completedTrips} trips were completed in the selected period.`, [{ label: 'Completed trips', value: String(dashboard.metrics.completedTrips) }]);
     if (/unavailable|maintenance|in use/.test(question)) return response('Vehicle availability', `${dashboard.metrics.availableVehicles} vehicles are available, ${dashboard.metrics.inUseVehicles} are in use, and ${dashboard.metrics.maintenanceVehicles} are under maintenance.`, availability(dashboard.metrics));
