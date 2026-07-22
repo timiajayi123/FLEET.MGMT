@@ -5,7 +5,6 @@ import {
   CarFront,
   ClipboardList,
   Fuel,
-  Gauge,
   LayoutDashboard,
   Map as MapIcon,
   MapPin,
@@ -91,7 +90,6 @@ export const navigation: NavigationGroup[] = [
     label: 'Analytics',
     items: [
       { label: 'Reports', href: '/analytics/reports', icon: BarChart3, roles: ['S_ADMIN', 'FM'] },
-      { label: 'Dashboard Analytics', href: '/analytics/dashboard', icon: Gauge, roles: ['S_ADMIN', 'FM'] },
     ],
   },
   {

@@ -1,8 +1,9 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
+import { AnalyticsDashboard } from '@/components/analytics-dashboard';
 import { apiMessage, readApiJson } from '@/lib/api-response';
-import { Activity, ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, MapPin, Navigation, Route, X, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, MapPin, Navigation, Route, X, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -27,21 +28,20 @@ type DashboardData = {
 };
 
 export default function DashboardPage() {
-  const [days, setDays] = useState(30);
   const [data, setData] = useState<DashboardData | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(
     () =>
-      fetch(`/api/dashboard?days=${days}`)
+      fetch('/api/dashboard?days=30')
         .then(async (r) => {
           const p = await readApiJson<DashboardData>(r, 'Unable to load dashboard.');
           if (!r.ok) throw new Error(apiMessage(p.message, 'Unable to load dashboard.'));
           setData(p);
         })
         .catch((e) => setError(e.message)),
-    [days],
+    [],
   );
 
   useEffect(() => { void load(); }, [load]);
@@ -68,13 +68,13 @@ export default function DashboardPage() {
       ) : data?.role === 'STAFF' ? (
         <StaffDashboard data={data} />
       ) : (
-        <AdminDashboard data={data} days={days} setDays={setDays} />
+        <AdminDashboard data={data} />
       )}
     </>
   );
 }
 
-function AdminDashboard({ data, days, setDays }: { data: DashboardData | null; days: number; setDays: (days: number) => void }) {
+function AdminDashboard({ data }: { data: DashboardData | null }) {
   const metrics = [
     { label: 'Total requests', value: data?.metrics.totalRequests ?? 0, note: 'All submitted requests', icon: ClipboardList, tone: 'green' },
     { label: 'Pending requests', value: data?.metrics.pendingRequests ?? 0, note: 'Awaiting approval', icon: Clock3, tone: 'amber' },
@@ -84,7 +84,8 @@ function AdminDashboard({ data, days, setDays }: { data: DashboardData | null; d
   return (
     <>
       <MetricGrid metrics={metrics} />
-      <DashboardPanels data={data} days={days} setDays={setDays} queueTitle="Approval queue" queueDescription="Requests requiring attention." />
+      <AnalyticsDashboard embedded />
+      <ApprovalQueue data={data} />
     </>
   );
 }
@@ -235,6 +236,7 @@ function MetricGrid({ metrics }: { metrics: { label: string; value: number | str
   return <section className="metric-grid">{metrics.map((m) => { const Icon = m.icon; return <article className="metric-card" key={m.label}><div className={`metric-icon ${m.tone}`}><Icon size={20} /></div><div><p>{m.label}</p><strong>{m.value}</strong><small>{m.note}</small></div><ArrowUpRight className="metric-arrow" size={17} /></article>; })}</section>;
 }
 
+/* Replaced by the embedded analytics workspace and ApprovalQueue above.
 function DashboardPanels({ data, days, setDays, queueTitle, queueDescription }: { data: DashboardData | null; days: number; setDays: (days: number) => void; queueTitle: string; queueDescription: string }) {
   return <section className="dashboard-grid"><ActivityPanel data={data} days={days} setDays={setDays} title="Fleet Activity Timeline" description="Vehicle request activity over the selected period." /><article className="panel"><div className="panel-heading"><div><h2>{queueTitle}</h2><p>{queueDescription}</p></div></div>{data?.approvalQueue.length ? <div className="notification-list">{data.approvalQueue.map((x) => <div className="notification-item" key={x.id}><span><strong>{x.requestNumber}</strong><small>{x.staffName} · {x.destination}</small></span></div>)}</div> : <Empty icon={<CheckCircle2 size={28} />} title="No pending requests" text="New pending approvals will appear here." />}</article></section>;
 }
@@ -244,8 +246,17 @@ function ActivityPanel({ data, days, setDays, title, description }: { data: Dash
   return <article className="panel chart-panel"><div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><select value={days} onChange={(e) => setDays(Number(e.target.value))}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">This year</option></select></div>{data?.activity.some((x) => x.count > 0) ? <><div className="chart-placeholder">{data.activity.map((x) => <span key={x.date} title={`${x.date}: ${x.count} vehicle request(s)`} aria-label={`${x.date}: ${x.count} vehicle request(s)`} style={{ height: `${Math.max(4, (x.count / max) * 100)}%` }} />)}</div><div className="chart-axis"><span>{data.activity[0]?.date}</span><span>{data.activity.at(-1)?.date}</span></div></> : <Empty icon={<Activity size={28} />} title="No request activity yet" text="The timeline will populate when requests are submitted." />}</article>;
 }
 
+function ApprovalQueue({ data }: { data: DashboardData | null }) {
+  return <section className="dashboard-grid"><article className="panel"><div className="panel-heading"><div><h2>Approval queue</h2><p>Requests requiring attention.</p></div></div>{data?.approvalQueue.length ? <div className="notification-list">{data.approvalQueue.map((item) => <div className="notification-item" key={item.id}><span><strong>{item.requestNumber}</strong><small>{item.staffName} · {item.destination}</small></span></div>)}</div> : <Empty icon={<CheckCircle2 size={28} />} title="No pending requests" text="New pending approvals will appear here." />}</article></section>;
+}
+
+*/
 function Empty({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return <div className="empty-compact">{icon}<strong>{title}</strong><span>{text}</span></div>;
+}
+
+function ApprovalQueue({ data }: { data: DashboardData | null }) {
+  return <section className="dashboard-grid"><article className="panel"><div className="panel-heading"><div><h2>Approval queue</h2><p>Requests requiring attention.</p></div></div>{data?.approvalQueue.length ? <div className="notification-list">{data.approvalQueue.map((item) => <div className="notification-item" key={item.id}><span><strong>{item.requestNumber}</strong><small>{item.staffName} · {item.destination}</small></span></div>)}</div> : <Empty icon={<CheckCircle2 size={28} />} title="No pending requests" text="New pending approvals will appear here." />}</article></section>;
 }
 
 function staffStatusLabel(status: string) {

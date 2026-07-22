@@ -734,6 +734,11 @@ button {
   margin-bottom: 1rem;
 }
 
+.dashboard-analytics-embedded { display: grid; gap: 1rem; margin-top: 1rem; }
+.analytics-embedded-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.analytics-embedded-heading h2, .analytics-embedded-heading p { margin: 0; }
+.analytics-embedded-heading p { margin-top: .25rem; color: var(--text-soft); font-size: .8rem; }
+
 .line-chart-panel { min-width: 0; overflow: hidden; }
 .line-chart-panel .panel-heading > svg { color: #15966a; flex: 0 0 auto; }
 .line-chart-summary { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin: .45rem 0 .1rem; }
@@ -759,6 +764,7 @@ button {
 
 @media (max-width: 900px) {
   .analytics-chart-grid { grid-template-columns: 1fr; }
+  .analytics-embedded-heading { align-items: stretch; flex-direction: column; }
 }
 .chart-axis {
   display: flex;
