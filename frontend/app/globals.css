@@ -794,6 +794,7 @@ button {
 .report-hub-card { display: grid; min-height: 180px; grid-template-columns: auto 1fr; gap: 8px 13px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); text-align: left; }
 .report-hub-card:not(:disabled):hover { border-color: #15966a; box-shadow: 0 10px 24px rgb(15 43 28 / .10); transform: translateY(-1px); }
 .report-hub-card strong, .report-hub-card p, .report-hub-card small { grid-column: 2; margin: 0; }.report-hub-card p { color: var(--text-soft); line-height: 1.5; }.report-hub-card small { align-self: end; color: #15966a; font-weight: 700; }.report-hub-card:disabled { cursor: not-allowed; opacity: .58; }.report-hub-icon { display: grid; grid-row: span 3; width: 44px; height: 44px; place-items: center; border-radius: 12px; background: color-mix(in srgb, #15966a 14%, var(--surface-soft)); color: #15966a; }.report-header-actions { display: flex; gap: 8px; }.report-total { color: var(--text-soft); font-size: .85rem; white-space: nowrap; }
+.assistant-input-hint { padding: .48rem .62rem; border-left: 3px solid #15966a; border-radius: .35rem; color: var(--text-soft); background: color-mix(in srgb, #15966a 7%, var(--surface-soft)); font-size: .66rem; line-height: 1.45; }
 @media (max-width: 680px) { .report-hub-grid { grid-template-columns: 1fr; } .report-header-actions { width: 100%; justify-content: space-between; } }
 .trip-card-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .trip-replay-modal { width: min(980px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; border-radius: 18px; background: white; padding: 20px; }
@@ -1583,6 +1584,8 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.vehicle-type-table-icon { display: block; width: 4.25rem; height: 4.25rem; object-fit: contain; padding: .25rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--surface-soft); }
+.no-vehicle-type-icon { color: var(--text-faint); font-size: .7rem; font-style: italic; }
 .master-table code {
   padding: 0.2rem 0.4rem;
   border: 1px solid var(--border);

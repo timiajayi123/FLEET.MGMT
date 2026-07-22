@@ -95,7 +95,7 @@ export const navigation: NavigationGroup[] = [
   {
     label: 'AI',
     items: [
-      { label: 'Fleet Optimization', href: '/ai/fleet-optimization', icon: Sparkles, roles: ['S_ADMIN', 'FM'] },
+      { label: 'AI Assistant', href: '/ai/fleet-optimization', icon: Sparkles, roles: ['S_ADMIN', 'FM'] },
       { label: 'Predictive Maintenance', href: '/ai/predictive-maintenance', icon: BrainCircuit, roles: ['S_ADMIN', 'FM'] },
     ],
   },

@@ -156,7 +156,7 @@ export function LiveFleetMap() {
       marker.setLabel({
         text: mapSpeedLabel(position.speed),
         color: '#0f172a',
-        fontSize: '11px',
+        fontSize: '13px',
         fontWeight: '900',
         className: 'vehicle-speed-label',
       });
@@ -343,17 +343,17 @@ function vehicleMarkerIcon(maps: GoogleMapsNamespace, position: Position) {
   if (customUrl) {
     return {
       url: customUrl,
-      scaledSize: new maps.Size(56, 56),
-      anchor: new maps.Point(28, 28),
-      labelOrigin: new maps.Point(28, -8),
+      scaledSize: new maps.Size(82, 82),
+      anchor: new maps.Point(41, 41),
+      labelOrigin: new maps.Point(41, -10),
     };
   }
 
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(vehicleMarkerSvg(vehicleIconKind(position), color(position.connectionStatus)))}`,
-    scaledSize: new maps.Size(64, 64),
-    anchor: new maps.Point(32, 50),
-    labelOrigin: new maps.Point(32, -4),
+    scaledSize: new maps.Size(88, 88),
+    anchor: new maps.Point(44, 70),
+    labelOrigin: new maps.Point(44, -8),
   };
 }
 

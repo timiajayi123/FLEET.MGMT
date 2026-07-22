@@ -26,8 +26,10 @@ test('always uses the built-in assistant', async () => {
 
 test('answers fleet questions only from trusted analytics services', async () => {
   const assistant = new BuiltinFleetAssistantProvider(fakeAnalytics(), { trip: { findFirst: async () => null }, vehicleRequest: { findMany: async () => [] } });
+  const drivers = await assistant.ask('How many drivers are registered?', context);
   const pending = await assistant.ask('Show pending vehicle requests', context);
   const speed = await assistant.ask('Show overspeed events', context);
+  assert.equal(drivers.title, 'Driver count');
   assert.equal(pending.title, 'Pending vehicle requests');
   assert.equal(speed.title, 'Driver speed events');
 });
@@ -51,7 +53,7 @@ test('allows S_ADMIN and FM, while staff and drivers are blocked before assistan
 
 function fakeAnalytics() {
   return {
-    dashboard: async () => ({ metrics: { vehicles: 3, availableVehicles: 2, inUseVehicles: 1, maintenanceVehicles: 0, requests: 5, pendingRequests: 1, approvedRequests: 2, activeTrips: 1, completedTrips: 3, distanceTravelled: 12.4 }, requestStatus: [{ label: 'COMPLETED', value: 3 }], tripPurpose: [{ label: 'Official', value: 4 }], mostUsedVehicles: [{ label: 'FLEET-01', value: 3 }], mostActiveDrivers: [{ label: 'Driver 1', value: 3 }] }),
+    dashboard: async () => ({ metrics: { vehicles: 3, availableVehicles: 2, inUseVehicles: 1, maintenanceVehicles: 0, drivers: 4, activeDrivers: 2, requests: 5, pendingRequests: 1, approvedRequests: 2, trips: 4, activeTrips: 1, completedTrips: 3, distanceTravelled: 12.4 }, requestStatus: [{ label: 'COMPLETED', value: 3 }], tripPurpose: [{ label: 'Official', value: 4 }], mostUsedVehicles: [{ label: 'FLEET-01', value: 3 }], mostActiveDrivers: [{ label: 'Driver 1', value: 3 }] }),
     speed: async (_filters, threshold) => ({ threshold, records: 3, violations: [], averageSpeed: 30, maximumSpeed: 50 }),
   };
 }

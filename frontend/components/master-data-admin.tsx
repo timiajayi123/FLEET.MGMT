@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { MasterDataResource, masterDataResources } from './master-data-config';
 
 const API_URL = '/api';
@@ -38,6 +39,7 @@ type RecordItem = {
   state?: string | null;
   passengerCapacity?: number | null;
   mapIcon?: string | null;
+  mapIconMimeType?: string | null;
   isSystemRole?: boolean;
 };
 type Meta = {
@@ -316,6 +318,7 @@ export function MasterDataAdmin({
                 <tr>
                   <SortableHead label="Name" field="name" meta={meta} onSort={changeSort} />
                   <SortableHead label="Code" field="code" meta={meta} onSort={changeSort} />
+                  {hasExtra(config, 'mapIcon') && <th>Map icon</th>}
                   {'parentLabel' in config && <th>{config.parentLabel}</th>}
                   <SortableHead label="Status" field="status" meta={meta} onSort={changeSort} />
                   <SortableHead label="Order" field="sortOrder" meta={meta} onSort={changeSort} />
@@ -334,6 +337,11 @@ export function MasterDataAdmin({
                     <td>
                       <code>{record.code}</code>
                     </td>
+                    {hasExtra(config, 'mapIcon') && (
+                      <td>
+                        {vehicleTypeIconUrl(record) ? <Image className="vehicle-type-table-icon" src={vehicleTypeIconUrl(record)} alt={`${record.name} map icon`} width={68} height={68} unoptimized /> : <span className="no-vehicle-type-icon">No icon</span>}
+                      </td>
+                    )}
                     {'parentLabel' in config && (
                       <td>{record.directorate?.name ?? record.department?.name ?? '—'}</td>
                     )}
@@ -422,6 +430,11 @@ export function MasterDataAdmin({
       )}
     </>
   );
+}
+
+function vehicleTypeIconUrl(record: RecordItem) {
+  if (record.mapIconMimeType) return `/api/vehicle-types/${record.id}/map-icon`;
+  return record.mapIcon ?? '';
 }
 
 function SortableHead({
