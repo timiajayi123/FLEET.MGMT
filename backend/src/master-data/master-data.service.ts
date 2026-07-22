@@ -114,6 +114,7 @@ export class MasterDataService {
             skip,
             take: limit,
             orderBy,
+            select: { id: true, code: true, name: true, description: true, passengerCapacity: true, mapIcon: true, mapIconMimeType: true, status: true, sortOrder: true, createdAt: true, updatedAt: true },
           }),
         ]);
         break;
