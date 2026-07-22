@@ -16,7 +16,7 @@ export class AnalyticsService {
       this.prisma.vehicleRequest.count({ where: { ...requestWhere, status: { in: ['APPROVED', 'ALLOCATED'] } } }), this.prisma.vehicleRequest.count({ where: { ...requestWhere, status: 'REJECTED' } }),
       this.prisma.trip.count({ where: tripWhere }), this.prisma.trip.count({ where: { ...tripWhere, status: 'COMPLETED' } }), this.prisma.trip.count({ where: { ...tripWhere, status: 'IN_PROGRESS' } }),
       this.prisma.vehicleRequest.findMany({ where: requestWhere, select: { createdAt: true, status: true, purposeOfTrip: true, tripCategory: true, department: true } }),
-      this.prisma.trip.findMany({ where: tripWhere, select: { startedAt: true, endedAt: true, calculatedDistance: true, maximumSpeed: true, averageSpeed: true, vehicle: { select: { registrationNumber: true } }, driver: { select: { staffName: true } } } }),
+      this.prisma.trip.findMany({ where: tripWhere, select: { createdAt: true, startedAt: true, endedAt: true, calculatedDistance: true, maximumSpeed: true, averageSpeed: true, vehicle: { select: { registrationNumber: true } }, driver: { select: { staffName: true } } } }),
     ]);
     const completed = tripRows.filter((trip) => trip.startedAt && trip.endedAt);
     const averageTripDurationMinutes = completed.length ? completed.reduce((total, trip) => total + ((trip.endedAt!.getTime() - trip.startedAt!.getTime()) / 60000), 0) / completed.length : null;
@@ -24,6 +24,8 @@ export class AnalyticsService {
     return {
       metrics: { vehicles, availableVehicles, inUseVehicles, maintenanceVehicles, drivers, activeDrivers, requests, pendingRequests, approvedRequests, rejectedRequests, trips, completedTrips, activeTrips, averageTripDurationMinutes, distanceTravelled },
       activity: groupByDate(requestRows.map((row) => ({ date: row.createdAt, value: 1 }))),
+      driverActivity: groupByDate(tripRows.map((row) => ({ date: row.createdAt, value: 1 }))),
+      distanceActivity: groupByDate(tripRows.map((row) => ({ date: row.createdAt, value: row.calculatedDistance ?? 0 }))),
       requestStatus: counts(requestRows.map((row) => row.status)),
       tripPurpose: counts(requestRows.map((row) => row.tripCategory ?? row.purposeOfTrip)),
       requestsByDepartment: counts(requestRows.map((row) => row.department)),

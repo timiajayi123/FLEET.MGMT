@@ -160,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </section>
           ) : !user ? (
-            <AccessDenied title="Sign in required" message="Please sign in to access the fleet management system." />
+            <AccessDenied title="Sign in required" message="Please sign in to access the fleet management system." actionHref="/login" actionLabel="Sign in" />
           ) : !routeAllowed ? (
             <AccessDenied title="Permission required" message="Your role does not have access to this module." />
           ) : (
@@ -178,15 +178,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function AccessDenied({ title, message }: { title: string; message: string }) {
+function AccessDenied({ title, message, actionHref = '/dashboard', actionLabel = 'Go to dashboard' }: { title: string; message: string; actionHref?: string; actionLabel?: string }) {
   return (
     <section className="master-panel">
       <div className="master-empty">
         <ShieldCheck size={30} />
         <h2>{title}</h2>
         <p>{message}</p>
-        <Link className="primary-action" href="/dashboard">
-          Go to dashboard
+        <Link className="primary-action" href={actionHref}>
+          {actionLabel}
         </Link>
       </div>
     </section>
