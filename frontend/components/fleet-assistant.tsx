@@ -1,13 +1,61 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { Bot, CarFront, CheckCircle2, ClipboardList, Gauge, LoaderCircle, MessageCircleQuestion, Plus, Send, Sparkles, Trash2, Users } from 'lucide-react';
 import { PageHeader } from './page-header';
 
-type Message = { role: 'admin' | 'assistant'; text: string; title?: string; table?: { label: string; value: string | number }[]; action?: { label: string; href: string } };
-const suggestions = ['What was the last trip?', 'Show pending vehicle requests', 'Which vehicle has the highest usage?', 'Which drivers exceeded the speed limit?', 'Generate a vehicle request report'];
+type Message = { id: string; role: 'admin' | 'assistant'; text: string; createdAt: Date; title?: string; table?: { label: string; value: string | number }[]; action?: { label: string; href: string } | null };
+const quickQuestions = [
+  { question: 'What was the last trip?', title: 'Latest Trip', icon: CarFront },
+  { question: 'Show pending vehicle requests', title: 'Pending Requests', icon: ClipboardList },
+  { question: 'Which vehicle has the highest usage?', title: 'Vehicle Utilisation', icon: Gauge },
+  { question: 'Which drivers exceeded the speed limit?', title: 'Speed Violations', icon: Gauge },
+  { question: 'Generate a vehicle request report', title: 'Request Report', icon: ClipboardList },
+  { question: 'Which drivers are most active?', title: 'Driver Activity', icon: Users },
+] as const;
+const loadingMessages = ['Analysing fleet data…', 'Checking vehicle records…', 'Generating response…'];
 
 export function FleetAssistant() {
-  const [messages, setMessages] = useState<Message[]>([]); const [input, setInput] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
-  async function send(event?: FormEvent, suggested?: string) { event?.preventDefault(); const message = (suggested ?? input).trim(); if (!message || loading) return; setMessages((current) => [...current, { role: 'admin', text: message }]); setInput(''); setLoading(true); setError(''); try { const response = await fetch('/api/ai/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.message || 'The assistant could not answer right now.'); setMessages((current) => [...current, { role: 'assistant', text: payload.data.text, title: payload.data.title, table: payload.data.table, action: payload.data.action }]); } catch (reason) { setError(reason instanceof Error ? reason.message : 'The assistant could not answer right now.'); } finally { setLoading(false); } }
-  return <><PageHeader title="Fleet AI Assistant" description="Ask secure, data-backed questions about authorised fleet records." actions={<button className="secondary-action" onClick={() => { setMessages([]); setError(''); }}>Clear chat</button>} /><section className="panel fleet-assistant"><div className="assistant-suggestions">{suggestions.map((question) => <button key={question} onClick={() => void send(undefined, question)} disabled={loading}>{question}</button>)}</div><div className="assistant-messages" aria-live="polite">{messages.length ? messages.map((message, index) => <article key={index} className={`assistant-message ${message.role}`}><strong>{message.role === 'admin' ? 'You' : message.title ?? 'Fleet assistant'}</strong><p>{message.text}</p>{message.table && <div className="assistant-table">{message.table.map((row) => <span key={`${row.label}-${row.value}`}><small>{row.label}</small><b>{row.value}</b></span>)}</div>}{message.action && <a className="assistant-action" href={message.action.href}>{message.action.label}</a>}</article>) : <p className="empty-compact">Ask a suggested question to begin. Answers use only authorised fleet records and controlled analytics.</p>}{loading && <p>Checking fleet records…</p>}</div>{error && <div className="master-alert">{error}</div>}<form onSubmit={(event) => void send(event)} className="assistant-input"><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about requests, trips, vehicles, drivers or speed" maxLength={1000} /><button type="submit" disabled={loading || !input.trim()}>Send</button></form></section></>;
+  const [messages, setMessages] = useState<Message[]>([]); const [input, setInput] = useState(''); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [loadingText, setLoadingText] = useState(loadingMessages[0]); const [suggestionsVisible, setSuggestionsVisible] = useState(true);
+  const inputRef = useRef<HTMLTextAreaElement>(null); const conversationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { conversationRef.current?.scrollTo({ top: conversationRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, loading]);
+  useEffect(() => { if (!loading) return; const timer = window.setInterval(() => setLoadingText((current) => loadingMessages[(loadingMessages.indexOf(current) + 1) % loadingMessages.length]), 1800); return () => window.clearInterval(timer); }, [loading]);
+
+  function resizeInput() { const element = inputRef.current; if (!element) return; element.style.height = '0px'; element.style.height = `${Math.min(element.scrollHeight, 132)}px`; }
+  function startNewChat() { setMessages([]); setInput(''); setError(''); setSuggestionsVisible(true); window.setTimeout(() => inputRef.current?.focus(), 0); }
+  function clearChat() { setMessages([]); setInput(''); setError(''); setSuggestionsVisible(false); }
+  async function send(event?: FormEvent, suggested?: string) {
+    event?.preventDefault(); const message = (suggested ?? input).trim(); if (!message || loading) return;
+    setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'admin', text: message, createdAt: new Date() }]); setInput(''); setSuggestionsVisible(false); setLoading(true); setError('');
+    window.setTimeout(resizeInput, 0);
+    try {
+      const response = await fetch('/api/ai/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) });
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.message || 'The assistant could not answer right now.');
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'assistant', text: payload.data.text, title: payload.data.title, table: payload.data.table, action: payload.data.action, createdAt: new Date() }]);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'The assistant could not answer right now.'); } finally { setLoading(false); }
+  }
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }
+  const charactersLeft = 1000 - input.length;
+  return <><PageHeader title="Fleet AI Assistant" description="Ask questions about your fleet, vehicles, trips, analytics and reports." /><section className="panel fleet-assistant" aria-label="Fleet AI Assistant chat"><header className="assistant-header"><div className="assistant-brand"><span className="assistant-avatar" aria-hidden="true"><Bot size={21} /></span><div><div className="assistant-title-row"><h2>Fleet AI Assistant</h2>{loading && <span className="assistant-thinking"><LoaderCircle size={13} /> Thinking</span>}</div><p>Secure insights from authorised fleet records.</p></div></div><div className="assistant-header-actions"><button type="button" className="secondary-action assistant-new-chat" onClick={startNewChat}><Plus size={16} /> New chat</button><button type="button" className="assistant-clear" onClick={clearChat} disabled={!messages.length && !input}><Trash2 size={15} /> Clear</button></div></header><div className="assistant-conversation" ref={conversationRef} aria-live="polite" aria-busy={loading}>{messages.length ? <div className="assistant-message-list">{messages.map((message) => <ChatMessage key={message.id} message={message} />)}</div> : <EmptyState showSuggestions={suggestionsVisible} onSuggestion={(question) => void send(undefined, question)} onShowSuggestions={() => setSuggestionsVisible(true)} />}{loading && <LoadingState text={loadingText} />}</div>{error && <div className="master-alert assistant-error" role="alert">{error}</div>}<form onSubmit={(event) => void send(event)} className="assistant-composer"><div className="assistant-suggestion-strip">{messages.length > 0 && <small>Quick questions</small>}{suggestionsVisible && messages.length > 0 && <QuickQuestionChips onSelect={(question) => void send(undefined, question)} compact />}</div><div className="assistant-input-wrap"><textarea ref={inputRef} value={input} onChange={(event) => { setInput(event.target.value); resizeInput(); }} onKeyDown={onKeyDown} placeholder="Ask Fleet AI anything…" maxLength={1000} rows={1} aria-label="Ask Fleet AI anything" /><button type="submit" className="assistant-send" disabled={loading || !input.trim()} aria-label="Send message"><Send size={18} /></button></div><footer><span>Enter to send <b>·</b> Shift + Enter for a new line</span>{charactersLeft <= 200 && <span className={charactersLeft <= 50 ? 'near-limit' : ''}>{charactersLeft} characters left</span>}</footer></form></section></>;
 }
+
+function EmptyState({ showSuggestions, onSuggestion, onShowSuggestions }: { showSuggestions: boolean; onSuggestion: (question: string) => void; onShowSuggestions: () => void }) {
+  return <div className="assistant-empty"><span className="assistant-empty-icon"><Sparkles size={29} /></span><h2>How can I help today?</h2><p>I can help you understand fleet analytics, reports, trips, drivers and vehicle usage.</p>{showSuggestions ? <QuickQuestionChips onSelect={onSuggestion} /> : <button type="button" className="assistant-show-suggestions" onClick={onShowSuggestions}><MessageCircleQuestion size={16} /> Show suggestions again</button>}</div>;
+}
+
+function QuickQuestionChips({ onSelect, compact = false }: { onSelect: (question: string) => void; compact?: boolean }) {
+  return <div className={`assistant-suggestions${compact ? ' compact' : ''}`} aria-label="Quick questions">{quickQuestions.map(({ question, title, icon: Icon }) => <button type="button" key={question} onClick={() => onSelect(question)}><Icon size={compact ? 14 : 17} /><span>{title}</span></button>)}</div>;
+}
+
+function ChatMessage({ message }: { message: Message }) {
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(message.createdAt);
+  return <article className={`assistant-message ${message.role}`}><div className="assistant-message-meta">{message.role === 'assistant' && <span className="assistant-message-avatar" aria-hidden="true"><Bot size={15} /></span>}<strong>{message.role === 'admin' ? 'You' : message.title ?? 'Fleet AI'}</strong><time dateTime={message.createdAt.toISOString()}>{time}</time></div><RichText text={message.text} />{message.table && <dl className="assistant-table">{message.table.map((row) => <div key={`${row.label}-${row.value}`}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}</dl>}{message.action && <a className="assistant-action" href={message.action.href}><CheckCircle2 size={15} /> {message.action.label}</a>}</article>;
+}
+
+function RichText({ text }: { text: string }) {
+  const lines = text.split('\n').filter(Boolean); const isList = lines.length > 1 && lines.every((line) => /^[-•]|^\d+[.)]/.test(line.trim()));
+  if (isList) return <ul className="assistant-rich-list">{lines.map((line) => <li key={line}>{line.replace(/^[-•]\s*|^\d+[.)]\s*/, '')}</li>)}</ul>;
+  return <p>{text}</p>;
+}
+
+function LoadingState({ text }: { text: string }) { return <div className="assistant-loading"><span><i /><i /><i /></span><p>{text}</p></div>; }

@@ -16,8 +16,19 @@ export class AiService {
     }
     try { return await this.openai.ask(message, context); }
     catch (error) {
-      this.logger.warn(JSON.stringify({ requestId: context.requestId, provider: 'openai', result: 'fallback_to_builtin', category: error instanceof Error ? error.name : 'unknown' }));
+      this.logger.warn(JSON.stringify({ requestId: context.requestId, provider: 'openai', result: 'fallback_to_builtin', ...safeProviderError(error) }));
       return this.builtin.ask(message, context);
     }
   }
+}
+
+function safeProviderError(error: unknown) {
+  if (!error || typeof error !== 'object') return { category: 'unknown' };
+  const value = error as Record<string, unknown>;
+  return {
+    category: typeof value.name === 'string' ? value.name : 'unknown',
+    status: typeof value.status === 'number' ? value.status : undefined,
+    code: typeof value.code === 'string' ? value.code.slice(0, 100) : undefined,
+    type: typeof value.type === 'string' ? value.type.slice(0, 100) : undefined,
+  };
 }
