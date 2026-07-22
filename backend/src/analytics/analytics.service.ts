@@ -46,6 +46,16 @@ export class AnalyticsService {
     const rows = await this.prisma.vehicleRequest.findMany({ where: { createdAt: dateRange(filters), ...(filters.status ? { status: filters.status } : {}), ...(filters.departmentId ? { departmentId: filters.departmentId } : {}), ...(filters.search ? { OR: [{ requestNumber: { contains: filters.search } }, { staffName: { contains: filters.search } }, { destination: { contains: filters.search } }] } : {}) }, include: { allocations: { include: { vehicle: { select: { registrationNumber: true } }, driver: { select: { staffName: true } } }, take: 1, orderBy: { createdAt: 'desc' } }, trips: { select: { status: true, calculatedDistance: true, maximumSpeed: true, averageSpeed: true, startedAt: true, endedAt: true }, take: 1, orderBy: { createdAt: 'desc' } } }, orderBy: { createdAt: 'desc' }, take: 1000 });
     return { total: rows.length, data: rows };
   }
+
+  async latestTripSummary() {
+    const trip = await this.prisma.trip.findFirst({
+      where: { requestId: { not: null } },
+      orderBy: [{ endedAt: 'desc' }, { startedAt: 'desc' }, { createdAt: 'desc' }],
+      select: { status: true, startedAt: true, endedAt: true, calculatedDistance: true, vehicle: { select: { registrationNumber: true } } },
+    });
+    if (!trip) return { available: false };
+    return { available: true, vehicle: trip.vehicle.registrationNumber, status: trip.status, startedAt: trip.startedAt?.toISOString() ?? null, endedAt: trip.endedAt?.toISOString() ?? null, distanceKm: Number((trip.calculatedDistance ?? 0).toFixed(1)) };
+  }
 }
 
 function dateRange(filters: AnalyticsFilters) { return filters.from || filters.to ? { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } : undefined; }
