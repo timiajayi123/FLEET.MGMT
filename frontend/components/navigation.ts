@@ -67,7 +67,7 @@ export const navigation: NavigationGroup[] = [
     items: [
       { label: 'GPS Tracking', href: '/operations/gps-tracking', icon: MapIcon, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
       { label: 'Fuel Management', href: '/operations/fuel-management', icon: Fuel, roles: ['S_ADMIN', 'FM'] },
-      { label: 'Maintenance', href: '/operations/maintenance', icon: Wrench, roles: ['S_ADMIN', 'FM'] },
+      { label: 'Maintenance', href: '/operations/maintenance', icon: Wrench, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
     ],
   },
   {

@@ -123,30 +123,32 @@ model Role {
 }
 
 model User {
-  id                  String              @id @default(uuid()) @db.UniqueIdentifier
-  email               String              @unique
+  id                  String               @id @default(uuid()) @db.UniqueIdentifier
+  email               String               @unique
   passwordHash        String
   staffName           String
-  employeeId          String              @unique
+  employeeId          String               @unique
   phone               String?
   passportMimeType    String?
   passportData        Bytes?
-  status              String              @default("ACTIVE")
-  roleId              String              @db.UniqueIdentifier
-  locationId          String?             @db.UniqueIdentifier
-  directorateId       String?             @db.UniqueIdentifier
-  departmentId        String?             @db.UniqueIdentifier
-  unitId              String?             @db.UniqueIdentifier
-  role                Role                @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  location            Location?           @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  directorate         Directorate?        @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  department          Department?         @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit                Unit?               @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  status              String               @default("ACTIVE")
+  roleId              String               @db.UniqueIdentifier
+  locationId          String?              @db.UniqueIdentifier
+  directorateId       String?              @db.UniqueIdentifier
+  departmentId        String?              @db.UniqueIdentifier
+  unitId              String?              @db.UniqueIdentifier
+  role                Role                 @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  location            Location?            @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  directorate         Directorate?         @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department          Department?          @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit                Unit?                @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   sessions            Session[]
   requests            VehicleRequest[]
-  assignedAllocations VehicleAllocation[] @relation("AllocationAssigner")
-  createdAt           DateTime            @default(now()) @db.DateTime2
-  updatedAt           DateTime            @updatedAt @db.DateTime2
+  assignedAllocations VehicleAllocation[]  @relation("AllocationAssigner")
+  maintenanceReports  MaintenanceRequest[] @relation("MaintenanceReporter")
+  maintenanceReviews  MaintenanceRequest[] @relation("MaintenanceReviewer")
+  createdAt           DateTime             @default(now()) @db.DateTime2
+  updatedAt           DateTime             @updatedAt @db.DateTime2
 
   @@index([status, staffName])
   @@index([roleId])
@@ -188,9 +190,34 @@ model Vehicle {
   currentLocations           DriverCurrentLocation[]
   locationHistory            DriverLocationHistory[]
   trips                      Trip[]
+  maintenanceRequests        MaintenanceRequest[]
 
   @@index([status, registrationNumber])
   @@map("vehicles")
+}
+
+model MaintenanceRequest {
+  id               String    @id @default(uuid()) @db.UniqueIdentifier
+  vehicleId        String    @db.UniqueIdentifier
+  reportedById     String    @db.UniqueIdentifier
+  issueType        String
+  issueDescription String    @db.NVarChar(2000)
+  issueOccurredAt  DateTime  @db.DateTime2
+  status           String    @default("PENDING_REVIEW")
+  serviceability   String?   @db.NVarChar(30)
+  adminRemark      String?   @db.NVarChar(2000)
+  reviewedById     String?   @db.UniqueIdentifier
+  reviewedAt       DateTime? @db.DateTime2
+  vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reportedBy       User      @relation("MaintenanceReporter", fields: [reportedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedBy       User?     @relation("MaintenanceReviewer", fields: [reviewedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt        DateTime  @default(now()) @db.DateTime2
+  updatedAt        DateTime  @updatedAt @db.DateTime2
+
+  @@index([status, createdAt])
+  @@index([vehicleId, createdAt])
+  @@index([reportedById, createdAt])
+  @@map("maintenance_requests")
 }
 
 model Driver {
