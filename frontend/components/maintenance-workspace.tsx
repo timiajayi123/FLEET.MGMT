@@ -40,12 +40,13 @@ export function MaintenanceWorkspace() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true); setError(''); setMessage('');
-    const data = Object.fromEntries(new FormData(event.currentTarget));
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
     try {
       const response = await fetch('/api/maintenance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Unable to submit maintenance request.');
-      event.currentTarget.reset();
+      form.reset();
       setMessage('Maintenance request submitted for fleet review.');
       await load();
     } catch (reason) {
