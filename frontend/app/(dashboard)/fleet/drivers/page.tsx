@@ -1,7 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
-import { Pencil, Trash2 } from 'lucide-react';
+import { CarFront, Eye, Gauge, Pencil, Route, Trash2 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type Driver = {
@@ -19,10 +19,16 @@ type Driver = {
 };
 
 type Mode = { type: 'create'; driver?: undefined } | { type: 'edit'; driver: Driver };
+type DriverDetails = {
+  driver: Driver;
+  vehicles: Array<{ id: string; registrationNumber: string; manufacturer: string; model: string; status: string; vehicleType?: { name: string } | null }>;
+  summary: { totalTrips: number; completedTrips: number; activeTrips: number; averageSpeed: number | null; totalDistance: number };
+};
 
 export default function DriversPage() {
   const [items, setItems] = useState<Driver[]>([]);
   const [mode, setMode] = useState<Mode | null>(null);
+  const [details, setDetails] = useState<DriverDetails | null>(null);
   const [error, setError] = useState('');
   const load = () => fetch('/api/drivers').then((r) => r.json()).then((p) => setItems(p.data || []));
 
@@ -100,6 +106,17 @@ export default function DriversPage() {
     await load();
   }
 
+  async function viewDetails(driver: Driver) {
+    setError('');
+    const response = await fetch(`/api/drivers/${driver.id}/details`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || 'Unable to load driver details.');
+      return;
+    }
+    setDetails(payload.data);
+  }
+
   return (
     <>
       <PageHeader
@@ -151,6 +168,9 @@ export default function DriversPage() {
                   <td>{driver.status.replaceAll('_', ' ')}</td>
                   <td>
                     <div className="row-actions">
+                      <button aria-label={`View ${driver.staffName} details`} onClick={() => void viewDetails(driver)}>
+                        <Eye size={15} />
+                      </button>
                       <button aria-label={`Edit ${driver.staffName}`} onClick={() => setMode({ type: 'edit', driver })}>
                         <Pencil size={15} />
                       </button>
@@ -178,8 +198,24 @@ export default function DriversPage() {
           onSubmit={(event) => void save(event)}
         />
       )}
+      {details && <DriverDetailsModal details={details} onClose={() => setDetails(null)} />}
     </>
   );
+}
+
+function DriverDetailsModal({ details, onClose }: { details: DriverDetails; onClose: () => void }) {
+  const { driver, vehicles, summary } = details;
+  return <div className="master-modal-backdrop"><section className="master-modal wide-modal driver-details-modal" role="dialog" aria-modal="true">
+    <header><div><span>Driver profile</span><h2>{driver.staffName}</h2><p>{driver.employeeId} · {driver.category || 'Driver'}</p></div><button onClick={onClose} aria-label="Close driver details">x</button></header>
+    <div className="driver-detail-stats">
+      <div><Route size={18} /><span>Total trips</span><strong>{summary.totalTrips}</strong></div>
+      <div><CarFront size={18} /><span>Completed trips</span><strong>{summary.completedTrips}</strong></div>
+      <div><Gauge size={18} /><span>Average speed</span><strong>{summary.averageSpeed == null ? '—' : `${Math.round(summary.averageSpeed)} km/h`}</strong></div>
+      <div><Route size={18} /><span>Distance recorded</span><strong>{summary.totalDistance.toFixed(1)} km</strong></div>
+    </div>
+    <section className="driver-detail-section"><h3>Vehicles allocated</h3>{vehicles.length ? <div className="driver-vehicle-list">{vehicles.map((vehicle) => <div key={vehicle.id}><CarFront size={18} /><span><strong>{vehicle.registrationNumber}</strong><small>{vehicle.manufacturer} {vehicle.model}{vehicle.vehicleType?.name ? ` · ${vehicle.vehicleType.name}` : ''}</small></span><em>{vehicle.status.replaceAll('_', ' ')}</em></div>)}</div> : <p>No vehicle allocations recorded for this driver.</p>}</section>
+    <footer><button className="primary-action" onClick={onClose}>Close</button></footer>
+  </section></div>;
 }
 
 function DriverModal({

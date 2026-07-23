@@ -26,6 +26,11 @@ export class DriversController {
     return { data: await this.drivers.list() };
   }
 
+  @Get(':id/details')
+  async details(@Param('id', ParseUUIDPipe) id: string) {
+    return { data: await this.drivers.details(id) };
+  }
+
   @Post()
   async create(@Body() dto: SaveDriverDto) {
     return { data: await this.drivers.create(dto) };

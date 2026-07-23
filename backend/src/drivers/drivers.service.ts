@@ -28,6 +28,44 @@ export class DriversService {
   list() {
     return this.prisma.driver.findMany({ select, orderBy: [{ serialNumber: 'asc' }, { staffName: 'asc' }] });
   }
+  async details(id: string) {
+    const driver = await this.prisma.driver.findUnique({ where: { id }, select });
+    if (!driver) throw new NotFoundException('Driver not found.');
+
+    const [allocations, trips, completedTrips, activeTrips] = await this.prisma.$transaction([
+      this.prisma.vehicleAllocation.findMany({
+        where: { driverId: id },
+        select: {
+          id: true, status: true, destination: true, purpose: true, startAt: true, expectedEndAt: true,
+          vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true, status: true, vehicleType: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.trip.aggregate({
+        where: { driverId: id },
+        _count: { _all: true },
+        _avg: { averageSpeed: true },
+        _sum: { calculatedDistance: true },
+      }),
+      this.prisma.trip.count({ where: { driverId: id, status: 'COMPLETED' } }),
+      this.prisma.trip.count({ where: { driverId: id, status: 'IN_PROGRESS' } }),
+    ]);
+
+    const uniqueVehicles = [...new Map(allocations.map((allocation) => [allocation.vehicle.id, allocation.vehicle])).values()];
+    return {
+      driver,
+      vehicles: uniqueVehicles,
+      allocations,
+      summary: {
+        totalTrips: trips._count._all,
+        completedTrips,
+        activeTrips,
+        averageSpeed: trips._avg.averageSpeed,
+        totalDistance: trips._sum.calculatedDistance ?? 0,
+      },
+    };
+  }
   create(dto: SaveDriverDto) {
     return this.prisma.driver.create({ data: this.data(dto), select });
   }
