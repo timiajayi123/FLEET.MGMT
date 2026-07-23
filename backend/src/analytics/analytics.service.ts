@@ -49,6 +49,15 @@ export class AnalyticsService {
     return { total: rows.length, data: rows };
   }
 
+  async maintenanceReport(filters: AnalyticsFilters) {
+    const rows = await this.prisma.maintenanceRequest.findMany({
+      where: { createdAt: dateRange(filters), ...(filters.status ? { status: filters.status } : {}), ...(filters.vehicleId ? { vehicleId: filters.vehicleId } : {}), ...(filters.search ? { OR: [{ issueType: { contains: filters.search } }, { issueDescription: { contains: filters.search } }, { vehicle: { registrationNumber: { contains: filters.search } } }, { reportedBy: { staffName: { contains: filters.search } } }] } : {}) },
+      select: { id: true, issueType: true, issueDescription: true, issueOccurredAt: true, evidenceMimeType: true, status: true, serviceability: true, adminRemark: true, createdAt: true, reviewedAt: true, vehicle: { select: { registrationNumber: true, manufacturer: true, model: true } }, reportedBy: { select: { staffName: true, employeeId: true } }, reviewedBy: { select: { staffName: true } } },
+      orderBy: { createdAt: 'desc' }, take: 1000,
+    });
+    return { total: rows.length, data: rows };
+  }
+
   async latestTripSummary() {
     const trip = await this.prisma.trip.findFirst({
       where: { requestId: { not: null } },

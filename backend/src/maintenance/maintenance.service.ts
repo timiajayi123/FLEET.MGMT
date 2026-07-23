@@ -4,7 +4,7 @@ import type { CreateMaintenanceRequestDto, ReviewMaintenanceRequestDto } from '.
 
 type SessionUser = { id: string; employeeId: string; role: { code: string } };
 const MANAGERS = ['S_ADMIN', 'FM'];
-const include = { vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true, status: true, serviceability: true, vehicleType: { select: { name: true } } } }, reportedBy: { select: { staffName: true, employeeId: true } }, reviewedBy: { select: { staffName: true } } } as const;
+const include = { evidenceMimeType: true, vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true, status: true, serviceability: true, vehicleType: { select: { name: true } } } }, reportedBy: { select: { staffName: true, employeeId: true } }, reviewedBy: { select: { staffName: true } } } as const;
 
 @Injectable()
 export class MaintenanceService {
@@ -24,11 +24,18 @@ export class MaintenanceService {
     return { data: [...unique.values()] };
   }
 
-  async create(dto: CreateMaintenanceRequestDto, user: SessionUser) {
+  async create(dto: CreateMaintenanceRequestDto, user: SessionUser, evidence?: Express.Multer.File) {
     const occurredAt = new Date(dto.issueOccurredAt);
     if (Number.isNaN(occurredAt.getTime()) || occurredAt > new Date()) throw new BadRequestException('Issue date must be a valid past or current date.');
+    if (evidence && !['image/jpeg', 'image/png', 'image/webp'].includes(evidence.mimetype)) throw new BadRequestException('Evidence image must be JPEG, PNG, or WebP.');
     await this.assertVehicleAllowed(dto.vehicleId, user);
-    return { data: await this.prisma.maintenanceRequest.create({ data: { vehicleId: dto.vehicleId, reportedById: user.id, issueType: dto.issueType.trim(), issueDescription: dto.issueDescription.trim(), issueOccurredAt: occurredAt }, include }) };
+    return { data: await this.prisma.maintenanceRequest.create({ data: { vehicleId: dto.vehicleId, reportedById: user.id, issueType: dto.issueType.trim(), issueDescription: dto.issueDescription.trim(), issueOccurredAt: occurredAt, ...(evidence ? { evidenceMimeType: evidence.mimetype, evidenceData: Uint8Array.from(evidence.buffer) } : {}) }, include }) };
+  }
+
+  async evidence(id: string) {
+    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id }, select: { evidenceMimeType: true, evidenceData: true } });
+    if (!request?.evidenceData || !request.evidenceMimeType) throw new NotFoundException('No maintenance evidence image was attached to this request.');
+    return request;
   }
 
   async review(id: string, dto: ReviewMaintenanceRequestDto, user: SessionUser) {

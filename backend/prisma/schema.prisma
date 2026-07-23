@@ -203,6 +203,8 @@ model MaintenanceRequest {
   issueType        String
   issueDescription String    @db.NVarChar(2000)
   issueOccurredAt  DateTime  @db.DateTime2
+  evidenceMimeType String?
+  evidenceData     Bytes?
   status           String    @default("PENDING_REVIEW")
   serviceability   String?   @db.NVarChar(30)
   adminRemark      String?   @db.NVarChar(2000)
