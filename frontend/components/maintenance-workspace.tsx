@@ -11,7 +11,7 @@ type MaintenanceRequest = { id: string; issueType: string; issueDescription: str
 export function MaintenanceWorkspace() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
-  const [canReview, setCanReview] = useState(false);
+  const [canReview, setCanReview] = useState<boolean | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -73,9 +73,9 @@ export function MaintenanceWorkspace() {
   }
 
   return <>
-    <PageHeader title="Vehicle Maintenance" description={canReview ? 'Review driver-submitted vehicle fault reports and record the fleet maintenance decision.' : 'Report a fault for a vehicle allocated to you. Fleet administrators will review it.'} />
+    <PageHeader title="Vehicle Maintenance" description={canReview === true ? 'Review driver-submitted vehicle fault reports and record the fleet maintenance decision.' : 'Report a fault for a vehicle allocated to you. Fleet administrators will review it.'} />
     <section className="maintenance-layout">
-      {!canReview && <article className="panel maintenance-form-panel">
+      {canReview === false && <article className="panel maintenance-form-panel">
         <div className="panel-heading"><div><h2>Report a vehicle issue</h2><p>Select the vehicle, fault type, date and a clear description.</p></div><Wrench size={20} /></div>
         <form className="maintenance-form" onSubmit={submit}>
           <label><span>Vehicle</span><select name="vehicleId" required defaultValue=""><option value="" disabled>Select vehicle</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.registrationNumber} - {vehicle.manufacturer} {vehicle.model}{vehicle.vehicleType?.name ? ` (${vehicle.vehicleType.name})` : ''}</option>)}</select></label>
@@ -88,15 +88,15 @@ export function MaintenanceWorkspace() {
         </form>
       </article>}
       <article className="panel maintenance-summary">
-        <div className="panel-heading"><div><h2>{canReview ? 'Fleet maintenance review' : 'My maintenance requests'}</h2><p>{canReview ? `${pending.length} request${pending.length === 1 ? '' : 's'} awaiting review.` : 'Your submitted vehicle fault reports.'}</p></div><ClipboardList size={20} /></div>
+        <div className="panel-heading"><div><h2>{canReview === true ? 'Fleet maintenance review' : 'My maintenance requests'}</h2><p>{canReview === true ? `${pending.length} request${pending.length === 1 ? '' : 's'} awaiting review.` : 'Your submitted vehicle fault reports.'}</p></div><ClipboardList size={20} /></div>
         {requests.length ? <div className="maintenance-request-list">{requests.map((request) => <article key={request.id}>
           <header><div><strong>{request.vehicle.registrationNumber}</strong><small>{request.vehicle.manufacturer} {request.vehicle.model} - {request.vehicle.vehicleType?.name ?? 'Vehicle type not set'}</small></div><span className={`maintenance-status ${request.status.toLowerCase()}`}>{statusLabel(request.status)}</span></header>
           <dl><div><dt>Issue</dt><dd>{request.issueType}</dd></div><div><dt>Occurred</dt><dd>{new Date(request.issueOccurredAt).toLocaleDateString()}</dd></div><div><dt>Reported by</dt><dd>{request.reportedBy.staffName}</dd></div></dl>
           <p>{request.issueDescription}</p>
           {request.evidenceMimeType && <a className="maintenance-evidence" href={`/api/maintenance/${request.id}/evidence`} target="_blank" rel="noreferrer"><Image src={`/api/maintenance/${request.id}/evidence`} alt={`Fault evidence for ${request.vehicle.registrationNumber}`} width={128} height={96} unoptimized /><span>View uploaded fault photo</span></a>}
           {request.adminRemark && <div className="maintenance-decision"><strong>{request.serviceability === 'SERVICEABLE' ? 'Serviceable - sent for maintenance' : 'Unserviceable - removed from service'}</strong><span>{request.adminRemark}</span>{request.reviewedBy && <small>Reviewed by {request.reviewedBy.staffName}</small>}</div>}
-          {canReview && request.status === 'PENDING_REVIEW' && <button className="secondary-action" onClick={() => setSelected(request)}>Review request</button>}
-        </article>)}</div> : <div className="master-empty"><Wrench size={28} /><h2>No maintenance requests</h2><p>{canReview ? 'Driver-submitted fault reports will appear here for review.' : 'Your submitted vehicle fault reports will appear here.'}</p></div>}
+          {canReview === true && request.status === 'PENDING_REVIEW' && <button className="secondary-action" onClick={() => setSelected(request)}>Review request</button>}
+        </article>)}</div> : <div className="master-empty"><Wrench size={28} /><h2>{canReview === null ? 'Loading maintenance requests' : 'No maintenance requests'}</h2><p>{canReview === true ? 'Driver-submitted fault reports will appear here for review.' : 'Your submitted vehicle fault reports will appear here.'}</p></div>}
       </article>
     </section>
     {message && <div className="maintenance-toast"><CheckCircle2 size={18} /> {message}</div>}
