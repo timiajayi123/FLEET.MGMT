@@ -4,7 +4,7 @@ import type { CreateMaintenanceRequestDto, ReviewMaintenanceRequestDto } from '.
 
 type SessionUser = { id: string; employeeId: string; role: { code: string } };
 const MANAGERS = ['S_ADMIN', 'FM'];
-const include = { evidenceMimeType: true, vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true, status: true, serviceability: true, vehicleType: { select: { name: true } } } }, reportedBy: { select: { staffName: true, employeeId: true } }, reviewedBy: { select: { staffName: true } } } as const;
+const include = { vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true, status: true, serviceability: true, vehicleType: { select: { name: true } } } }, reportedBy: { select: { staffName: true, employeeId: true } }, reviewedBy: { select: { staffName: true } } } as const;
 
 @Injectable()
 export class MaintenanceService {
