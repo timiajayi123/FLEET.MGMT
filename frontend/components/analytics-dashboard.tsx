@@ -55,10 +55,12 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
     {!embedded && <PageHeader title="Dashboard Analytics" description="Live fleet metrics, trips, vehicle requests and operational trends." actions={filters} />}
     {embedded && <div className="analytics-embedded-heading"><div><h2>Fleet analytics</h2><p>Live request, trip, distance and safety trends.</p></div>{filters}</div>}
     {error && <div className="master-alert">{error}</div>}
-    <section className="metric-grid">{cards.map(({ label, value, icon: Icon }) => <article className="metric-card" key={label}><div className="metric-icon blue"><Icon size={20} /></div><div><p>{label}</p><strong>{value ?? 0}</strong><small>Recorded in fleet data</small></div></article>)}</section>
     {loading ? <section className="panel"><p>Loading live analytics…</p></section> : !data ? <section className="panel"><p>Analytics could not be loaded.</p></section> : <>
-      <section className="analytics-chart-grid">
+      <section className="analytics-primary-layout">
         <FleetActivityTimeline rows={activityRows} range={range} />
+        <section className="panel fleet-analytics-side"><div className="panel-heading"><div><h2>Fleet analytics</h2><p>Current operational totals.</p></div></div><section className="metric-grid fleet-analytics-metrics">{cards.map(({ label, value, icon: Icon }) => <article className="metric-card" key={label}><div className="metric-icon blue"><Icon size={20} /></div><div><p>{label}</p><strong>{value ?? 0}</strong><small>Recorded in fleet data</small></div></article>)}</section></section>
+      </section>
+      <section className="analytics-chart-grid">
         <LineChart title="Speed and overspeed trend" description={`${speed?.violations.length ?? 0} point(s) above the 100 km/h threshold.`} rows={speedRows} icon={Gauge} tone="red" threshold={speed?.threshold ?? 100} unit="km/h" />
         <LineChart title="Trip distance trend" description="Recorded journey distance by trip date." rows={data.distanceActivity.map((row) => ({ label: row.date, value: row.value }))} icon={Route} tone="gold" unit="km" />
       </section>
@@ -78,9 +80,10 @@ function FleetActivityTimeline({ rows, range }: { rows: Row[]; range: string }) 
       <ChartDetail point={selected} fallback="Hover a point to see its date and combined activity." suffix="fleet activities" />
       <svg className="activity-timeline-chart" viewBox="0 0 1000 350" role="img" aria-label={`Fleet activity timeline: latest ${chart.latest}, peak ${chart.max}`} preserveAspectRatio="none">
         {chart.ticks.map((tick) => <g key={tick.value}><line className="activity-timeline-grid" x1="58" y1={tick.y} x2="978" y2={tick.y} /><text className="activity-timeline-y-label" x="48" y={tick.y + 4} textAnchor="end">{tick.value}</text></g>)}
+        {chart.verticalGrid.map((x) => <line className="activity-timeline-grid" key={x} x1={x} y1="24" x2={x} y2="286" />)}
         {chart.points.map((point, index) => (index % chart.labelEvery === 0 || index === chart.points.length - 1) && <text className="activity-timeline-x-label" key={`${point.label}-label`} x={point.x} y="329" textAnchor="middle">{shortDate(point.label)}</text>)}
-        <path className="activity-timeline-area" d={`${chart.path} L978 286 L58 286 Z`} />
-        <path className="activity-timeline-line" d={chart.path} />
+        <path className="activity-timeline-area" d={`${chart.areaPath} L978 286 L58 286 Z`} />
+        <path className="activity-timeline-line" d={chart.smoothPath} />
         {chart.points.map((point) => <circle className="activity-timeline-node" key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="4.5" tabIndex={0} onMouseEnter={() => setSelected(point)} onFocus={() => setSelected(point)} aria-label={`${shortDate(point.label)}: ${point.value} fleet activities`}><title>{`${shortDate(point.label)}: ${point.value} fleet activities`}</title></circle>)}
       </svg>
     </> : <p className="empty-compact">No fleet activity exists for this period.</p>}
@@ -90,7 +93,7 @@ function FleetActivityTimeline({ rows, range }: { rows: Row[]; range: string }) 
 function LineChart({ title, description, rows, icon: Icon, tone = 'green', threshold, unit = '' }: { title: string; description: string; rows: Row[]; icon: LucideIcon; tone?: 'green' | 'blue' | 'red' | 'gold'; threshold?: number; unit?: string }) {
   const chart = useMemo(() => chartPoints(rows, threshold), [rows, threshold]);
   const [selected, setSelected] = useState<{ label: string; value: number } | null>(null);
-  return <article className={`panel line-chart-panel ${tone}`}><div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><Icon size={19} /></div>{rows.length ? <><div className="line-chart-summary"><strong>{chart.latest}{unit && ` ${unit}`}</strong><span>{chart.max}{unit && ` ${unit}`} peak</span></div><ChartDetail point={selected} fallback="Hover a point to see its recorded date and value." suffix={unit} /><svg className="line-chart" viewBox="0 0 600 190" role="img" aria-label={`${title}: latest ${chart.latest}${unit}, peak ${chart.max}${unit}`} preserveAspectRatio="none"><path className="line-chart-grid" d="M24 28H584M24 74H584M24 120H584M24 166H584" />{threshold !== undefined && <><path className="line-chart-threshold" d={`M24 ${chart.y(threshold)}H584`} /><text x="580" y={chart.y(threshold) - 5} textAnchor="end">{threshold} {unit}</text></>}<path className="line-chart-area" d={`${chart.path} L584 166 L24 166 Z`} /><path className="line-chart-line" d={chart.path} />{chart.points.map((point) => <circle className="line-chart-node" key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="4" tabIndex={0} onMouseEnter={() => setSelected(point)} onFocus={() => setSelected(point)} aria-label={`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}><title>{`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}</title></circle>)}</svg><footer><span>{shortDate(rows[0].label)}</span><span>{shortDate(rows.at(-1)?.label ?? '')}</span></footer></> : <p className="empty-compact">No chart data exists for this period.</p>}</article>;
+  return <article className={`panel line-chart-panel ${tone}`}><div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><Icon size={19} /></div>{rows.length ? <><div className="line-chart-summary"><strong>{chart.latest}{unit && ` ${unit}`}</strong><span>{chart.max}{unit && ` ${unit}`} peak</span></div><ChartDetail point={selected} fallback="Hover a point to see its recorded date and value." suffix={unit} /><svg className="line-chart" viewBox="0 0 600 190" role="img" aria-label={`${title}: latest ${chart.latest}${unit}, peak ${chart.max}${unit}`} preserveAspectRatio="none"><path className="line-chart-grid" d="M24 28H584M24 74H584M24 120H584M24 166H584M24 28V166M136 28V166M248 28V166M360 28V166M472 28V166M584 28V166" />{threshold !== undefined && <><path className="line-chart-threshold" d={`M24 ${chart.y(threshold)}H584`} /><text x="580" y={chart.y(threshold) - 5} textAnchor="end">{threshold} {unit}</text></>}<path className="line-chart-area" d={`${chart.path} L584 166 L24 166 Z`} /><path className="line-chart-line" d={chart.path} />{chart.points.map((point) => <circle className="line-chart-node" key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="4" tabIndex={0} onMouseEnter={() => setSelected(point)} onFocus={() => setSelected(point)} aria-label={`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}><title>{`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}</title></circle>)}</svg><footer><span>{shortDate(rows[0].label)}</span><span>{shortDate(rows.at(-1)?.label ?? '')}</span></footer></> : <p className="empty-compact">No chart data exists for this period.</p>}</article>;
 }
 
 function ChartDetail({ point, fallback, suffix }: { point: { label: string; value: number } | null; fallback: string; suffix: string }) {
@@ -112,7 +115,19 @@ function timelinePoints(rows: Row[]) {
   const minX = 58; const maxX = 978; const minY = 24; const maxY = 286;
   const divisor = Math.max(1, rows.length - 1);
   const points = rows.map((row, index) => ({ x: minX + index / divisor * (maxX - minX), y: maxY - row.value / max * (maxY - minY), label: row.label, value: Math.round(row.value * 10) / 10 }));
-  return { points, max, latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10, path: points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' '), ticks: Array.from({ length: 6 }, (_, index) => ({ value: index * step, y: maxY - index / 5 * (maxY - minY) })), labelEvery: Math.max(1, Math.ceil(points.length / 12)) };
+  const areaPath = points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
+  return { points, max, latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10, areaPath, smoothPath: smoothPath(points), ticks: Array.from({ length: 6 }, (_, index) => ({ value: index * step, y: maxY - index / 5 * (maxY - minY) })), verticalGrid: Array.from({ length: 11 }, (_, index) => minX + index / 10 * (maxX - minX)), labelEvery: Math.max(1, Math.ceil(points.length / 12)) };
+}
+
+function smoothPath(points: { x: number; y: number }[]) {
+  if (points.length < 3) return points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M${point.x} ${point.y}`;
+    const previous = points[index - 1];
+    const midpointX = (previous.x + point.x) / 2;
+    const midpointY = (previous.y + point.y) / 2;
+    return `${path} Q${previous.x} ${previous.y} ${midpointX} ${midpointY}${index === points.length - 1 ? ` T${point.x} ${point.y}` : ''}`;
+  }, '');
 }
 
 function chartPoints(rows: Row[], threshold?: number) { const max = Math.max(1, threshold ?? 0, ...rows.map((row) => row.value)); const minX = 24; const maxX = 584; const minY = 28; const maxY = 166; const divisor = Math.max(1, rows.length - 1); const points = rows.map((row, index) => ({ x: minX + index / divisor * (maxX - minX), y: maxY - row.value / max * (maxY - minY), label: row.label, value: Math.round(row.value * 10) / 10 })); return { points, max: Math.round(max * 10) / 10, latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10, path: points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' '), y: (value: number) => maxY - Math.min(value, max) / max * (maxY - minY) }; }
