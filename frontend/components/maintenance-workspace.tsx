@@ -19,17 +19,22 @@ export function MaintenanceWorkspace() {
 
   const load = useCallback(async () => {
     try {
+      setError('');
       const [requestResponse, vehicleResponse] = await Promise.all([
         fetch('/api/maintenance', { cache: 'no-store' }),
         fetch('/api/maintenance/vehicles', { cache: 'no-store' }),
       ]);
-      const requestPayload = await requestResponse.json();
-      const vehiclePayload = await vehicleResponse.json();
+      const requestPayload = await requestResponse.json().catch(() => ({}));
+      const vehiclePayload = await vehicleResponse.json().catch(() => ({}));
       if (!requestResponse.ok) throw new Error(requestPayload.message || 'Unable to load maintenance requests.');
-      if (!vehicleResponse.ok) throw new Error(vehiclePayload.message || 'Unable to load eligible vehicles.');
       setRequests(requestPayload.data ?? []);
-      setVehicles(vehiclePayload.data ?? []);
       setCanReview(Boolean(requestPayload.canReview));
+      if (vehicleResponse.ok) {
+        setVehicles(vehiclePayload.data ?? []);
+      } else {
+        setVehicles([]);
+        setError(vehiclePayload.message || 'Your maintenance form is available, but no eligible vehicles could be loaded. Make sure your user account is linked to a driver profile and has an allocated vehicle.');
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load maintenance.');
     }
@@ -111,5 +116,5 @@ export function MaintenanceWorkspace() {
 }
 
 function statusLabel(status: string) {
-  return { PENDING_REVIEW: 'Pending review', MAINTENANCE_REQUIRED: 'Maintenance required', OUT_OF_SERVICE: 'Out of service' }[status] ?? status.replaceAll('_', ' ');
+  return { PENDING_REVIEW: 'Awaiting fleet decision', MAINTENANCE_REQUIRED: 'Approved for maintenance', OUT_OF_SERVICE: 'Out of service' }[status] ?? status.replaceAll('_', ' ');
 }

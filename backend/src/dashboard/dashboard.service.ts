@@ -48,7 +48,7 @@ export class DashboardService {
         where: { requesterId: user.id },
         orderBy: { createdAt: 'desc' },
         take: 5,
-        select: { id: true, requestNumber: true, destination: true, purposeOfTrip: true, status: true, createdAt: true, allocations: { take: 1, orderBy: { createdAt: 'desc' }, select: { driver: { select: { staffName: true } }, vehicle: { select: { registrationNumber: true } }, status: true } } },
+        select: { id: true, requestNumber: true, destination: true, purposeOfTrip: true, status: true, createdAt: true, allocations: { take: 1, orderBy: { createdAt: 'desc' }, select: { driver: { select: { staffName: true, employeeId: true, phone: true } }, vehicle: { select: { registrationNumber: true, manufacturer: true, model: true } }, status: true } } },
       }),
     ]);
     return {

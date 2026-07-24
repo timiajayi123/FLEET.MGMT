@@ -15,7 +15,7 @@ type StaffRequest = {
   purposeOfTrip: string;
   status: string;
   createdAt: string;
-  allocations: { status: string; driver: { staffName: string }; vehicle: { registrationNumber: string } }[];
+  allocations: { status: string; driver: { staffName: string; employeeId: string; phone: string }; vehicle: { registrationNumber: string; manufacturer: string; model: string } }[];
 };
 type DashboardData = {
   role: 'ADMIN' | 'STAFF' | 'DRIVER';
@@ -117,7 +117,8 @@ function StaffDashboard({ data }: { data: DashboardData }) {
     setVisibleRequestId(null);
   }
 
-  const latestRequest = data.myRequests?.[0] ?? null;
+  const currentTransport = data.myRequests?.find((request) => request.status === 'ALLOCATED' && request.allocations[0]) ?? null;
+  const latestRequest = currentTransport ?? data.myRequests?.[0] ?? null;
   const approvedByFleet = (data.metrics.approvedRequests ?? 0) + (data.metrics.allocatedRequests ?? 0) + (data.metrics.completedRequests ?? 0);
   const metrics = [
     { label: 'My requests', value: data.metrics.totalRequests ?? 0, note: 'All transport requests submitted by you', icon: ClipboardList, tone: 'green' },
@@ -130,17 +131,9 @@ function StaffDashboard({ data }: { data: DashboardData }) {
       <MetricGrid metrics={metrics} />
       <section className="dashboard-grid">
         <article className="panel">
-          <div className="panel-heading"><div><h2>Latest request update</h2><p>Your most recent transport request.</p></div></div>
+          <div className="panel-heading"><div><h2>{currentTransport ? 'Current transport assignment' : 'Latest request update'}</h2><p>{currentTransport ? 'Your approved transport, driver and vehicle details.' : 'Your most recent transport request.'}</p></div></div>
           {latestRequest ? (
-            <div className="driver-dashboard-assignment">
-              <strong>{latestRequest.requestNumber}</strong>
-              <span>{staffStatusLabel(latestRequest.status)}</span>
-              <small>Destination: {latestRequest.destination}</small>
-              {['ALLOCATED', 'COMPLETED'].includes(latestRequest.status) && latestRequest.allocations[0] && (
-                <small>Vehicle: {latestRequest.allocations[0].vehicle.registrationNumber}</small>
-              )}
-              <em>{staffStatusLabel(latestRequest.status)}</em>
-            </div>
+            <StaffRequestUpdate request={latestRequest} />
           ) : (
             <Empty icon={<ClipboardList size={28} />} title="No request yet" text="Submit a vehicle request when you need official transport." />
           )}
@@ -171,6 +164,12 @@ function StaffDashboard({ data }: { data: DashboardData }) {
   );
 }
 
+function StaffRequestUpdate({ request }: { request: StaffRequest }) {
+  const allocation = request.allocations[0];
+  if (!allocation) return <div className="staff-transport-summary"><div><strong>{request.requestNumber}</strong><em>{staffStatusLabel(request.status)}</em></div><p><span>Destination</span>{request.destination}</p><small>Fleet will add a driver and vehicle once transport is assigned.</small></div>;
+  return <div className="staff-transport-summary"><div><strong>{request.requestNumber}</strong><em>{staffStatusLabel(request.status)}</em></div><p><span>Destination</span>{request.destination}</p><div className="staff-transport-details"><span><small>Driver</small><strong>{allocation.driver.staffName}</strong></span><span><small>Driver ID</small><strong>{allocation.driver.employeeId}</strong></span><span><small>Phone number</small><strong>{allocation.driver.phone}</strong></span><span><small>Vehicle plate</small><strong>{allocation.vehicle.registrationNumber}</strong></span><span><small>Vehicle type</small><strong>{`${allocation.vehicle.manufacturer} ${allocation.vehicle.model}`.trim()}</strong></span><span><small>Assignment</small><strong>{allocation.status.replaceAll('_', ' ')}</strong></span></div></div>;
+}
+
 function StaffRequestStatusModal({ request, onClose }: { request: StaffRequest; onClose: () => void }) {
   const allocation = request.allocations[0];
   const allocated = request.status === 'ALLOCATED' && allocation;
@@ -193,8 +192,11 @@ function StaffRequestStatusModal({ request, onClose }: { request: StaffRequest; 
         </p>
         {allocated ? (
           <div className="staff-request-status-grid">
-            <span><small>Vehicle</small><strong>{allocation.vehicle.registrationNumber}</strong></span>
+            <span><small>Vehicle plate</small><strong>{allocation.vehicle.registrationNumber}</strong></span>
+            <span><small>Vehicle type</small><strong>{`${allocation.vehicle.manufacturer} ${allocation.vehicle.model}`.trim()}</strong></span>
             <span><small>Driver</small><strong>{allocation.driver.staffName}</strong></span>
+            <span><small>Driver ID</small><strong>{allocation.driver.employeeId}</strong></span>
+            <span><small>Phone number</small><strong>{allocation.driver.phone}</strong></span>
             <span><small>Assignment</small><strong>{allocation.status.replaceAll('_', ' ')}</strong></span>
           </div>
         ) : (

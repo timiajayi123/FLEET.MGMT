@@ -181,6 +181,11 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             </select>
             <small>Select whether this vehicle request is for official business.</small>
           </label>
+          <label className="field field-wide">
+            <span>Purpose details</span>
+            <textarea name="remarks" required minLength={5} maxLength={2000} rows={3} placeholder="State the reason for this official or non-official trip." />
+            <small>This reason is included in the request details for fleet review.</small>
+          </label>
           <label className="field">
             <span>Vehicle Type</span>
             <MasterSelectControl
@@ -223,16 +228,12 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
           <span>03</span>
           <div>
             <h2 id="support-heading">Supporting information</h2>
-            <p>Add context or an optional supporting document.</p>
+            <p>Upload an optional document that supports this request.</p>
           </div>
         </div>
         <div className="field-grid">
           <label className="field field-wide">
-            <span>Remarks</span>
-            <textarea name="remarks" maxLength={2000} rows={3} />
-          </label>
-          <label className="field field-wide">
-            <span>Attachment</span>
+            <span>Supporting document</span>
             <input name="attachment" type="file" accept="application/pdf,image/jpeg,image/png" />
             <small>Optional. PDF, JPEG, or PNG; maximum 10 MB.</small>
           </label>

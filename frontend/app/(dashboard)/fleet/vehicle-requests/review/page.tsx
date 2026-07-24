@@ -252,7 +252,7 @@ function RequestDetailsModal({ request, onClose }: { request: VehicleRequest; on
           <ReadOnly label="Passengers" value={String(request.numberOfPassengers)} />
           <ReadOnly label="Departure" value={new Date(request.departureDate).toLocaleString()} />
           <ReadOnly label="Expected return" value={new Date(request.expectedReturnDate).toLocaleString()} />
-          <ReadOnly label="Remarks" value={request.remarks || 'No remarks'} />
+          <ReadOnly label="Purpose details" value={request.remarks || 'No purpose details provided'} />
         </div>
         <footer>
           <button type="button" className="secondary-action" onClick={onClose}>Close</button>

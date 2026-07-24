@@ -809,6 +809,8 @@ button {
 .line-chart-panel.gold circle { stroke: #c98d18; }
 .line-chart-threshold { stroke: #d74f4f; stroke-width: 1.5; stroke-dasharray: 5 4; }
 .line-chart text { fill: #b23f3f; font-size: 10px; font-weight: 800; }
+.line-chart .line-chart-y-label { fill: var(--text-faint); font-size: 9px; font-weight: 700; }
+.chart-axis-title { fill: var(--text-soft); font-size: 10px; font-weight: 850; letter-spacing: .03em; }
 .line-chart-panel footer { display: flex; justify-content: space-between; color: var(--text-faint); font-size: .68rem; }
 
 @media (max-width: 900px) {
@@ -1832,6 +1834,17 @@ button {
   color: var(--text);
   font-size: 0.75rem;
 }
+.staff-transport-summary { display: grid; gap: .9rem; }
+.staff-transport-summary > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.staff-transport-summary > div:first-child > strong { font-size: 1rem; letter-spacing: .03em; }
+.staff-transport-summary em { padding: .3rem .55rem; border-radius: 999px; background: rgb(21 150 106 / 12%); color: #15966a; font-size: .67rem; font-style: normal; font-weight: 850; text-transform: uppercase; }
+.staff-transport-summary > p { display: grid; gap: .2rem; margin: 0; color: var(--text); font-size: .92rem; font-weight: 750; }
+.staff-transport-summary > p span { color: var(--text-faint); font-size: .62rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.staff-transport-summary > small { color: var(--text-soft); line-height: 1.5; }
+.staff-transport-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.staff-transport-details > span { display: flex; min-width: 0; flex-direction: column; gap: .25rem; padding: .75rem; border: 1px solid var(--border); border-radius: .7rem; background: var(--surface-soft); }
+.staff-transport-details small { color: var(--text-faint); font-size: .57rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.staff-transport-details strong { overflow-wrap: anywhere; color: var(--text); font-size: .78rem; }
 .staff-request-status-modal footer {
   display: flex;
   justify-content: center;

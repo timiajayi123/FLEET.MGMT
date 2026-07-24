@@ -108,8 +108,8 @@ export class CreateVehicleRequestDto {
   priority!: RequestPriority;
 
   @Transform(trim)
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(2000)
-  remarks?: string;
+  remarks!: string;
 }
