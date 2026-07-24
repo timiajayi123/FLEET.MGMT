@@ -56,7 +56,7 @@ export default function DashboardPage() {
   const roleCode = user?.role.code;
 
   return (
-    <>
+    <section className="dashboard-workspace">
       <PageHeader
         title={title}
         description={description(roleCode)}
@@ -70,7 +70,7 @@ export default function DashboardPage() {
       ) : (
         <AdminDashboard data={data} />
       )}
-    </>
+    </section>
   );
 }
 

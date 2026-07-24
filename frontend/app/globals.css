@@ -540,6 +540,31 @@ button {
   margin: 0 auto;
   padding: 1.5rem 0 4rem;
 }
+@media (min-width: 1100px) {
+  .app-content:has(.dashboard-workspace) { width: calc(100% - 3.5rem); max-width: none; }
+  .dashboard-workspace .content-header { margin-bottom: 2rem; }
+  .dashboard-workspace .content-header h1 { font-size: clamp(2rem, 2.45vw, 3rem); }
+  .dashboard-workspace .content-header p { max-width: 64rem; font-size: .98rem; }
+  .dashboard-workspace .date-chip { padding: .55rem .85rem; font-size: .78rem; }
+  .dashboard-workspace .metric-grid { gap: 1.25rem; margin-bottom: 1.4rem; }
+  .dashboard-workspace .metric-card { min-height: 7.25rem; gap: 1rem; padding: 1.25rem; border-radius: .95rem; }
+  .dashboard-workspace .metric-icon { width: 3.1rem; height: 3.1rem; border-radius: .8rem; }
+  .dashboard-workspace .metric-card p { font-size: .8rem; }
+  .dashboard-workspace .metric-card strong { font-size: 1.75rem; }
+  .dashboard-workspace .metric-card small { font-size: .7rem; }
+  .dashboard-workspace .metric-arrow { top: 1rem; right: 1rem; width: 1.15rem; height: 1.15rem; }
+  .dashboard-workspace .dashboard-analytics-embedded { gap: 1.25rem; margin-top: 1.5rem; }
+  .dashboard-workspace .analytics-embedded-heading h2 { font-size: 1.55rem; }
+  .dashboard-workspace .analytics-embedded-heading p { font-size: .95rem; }
+  .dashboard-workspace .line-chart-panel { min-height: 25rem; padding: 1.3rem; }
+  .dashboard-workspace .line-chart-panel h2 { font-size: 1.12rem; }
+  .dashboard-workspace .line-chart-panel .panel-heading p { font-size: .82rem; }
+  .dashboard-workspace .line-chart { height: 15rem; }
+  .dashboard-workspace .fleet-activity-timeline { min-height: 31rem; }
+  .dashboard-workspace .activity-timeline-chart { height: 21rem; }
+  .dashboard-workspace .line-chart-summary strong { font-size: 1.7rem; }
+  .dashboard-workspace .line-chart-summary span, .dashboard-workspace .line-chart-panel footer { font-size: .78rem; }
+}
 .sidebar-backdrop {
   display: none;
 }
@@ -733,6 +758,14 @@ button {
   gap: 1rem;
   margin-bottom: 1rem;
 }
+.fleet-activity-timeline { grid-column: 1 / -1; min-height: 25rem; }
+.activity-timeline-chart { display: block; width: 100%; height: 18rem; margin-top: .45rem; overflow: visible; }
+.activity-timeline-grid { stroke: color-mix(in srgb, var(--border) 82%, transparent); stroke-width: 1; }
+.activity-timeline-y-label, .activity-timeline-x-label { fill: var(--text-faint); font-size: 11px; font-weight: 700; }
+.activity-timeline-area { fill: rgb(21 150 106 / 13%); }
+.activity-timeline-line { fill: none; stroke: #15966a; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.activity-timeline-node { fill: var(--surface); stroke: #15966a; stroke-width: 2.5; cursor: help; transition: r .15s ease, stroke-width .15s ease; }
+.activity-timeline-node:hover, .activity-timeline-node:focus { r: 6.5; stroke-width: 3.5; outline: none; }
 
 .dashboard-analytics-embedded { display: grid; gap: 1rem; margin-top: 1rem; }
 .analytics-embedded-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
@@ -744,6 +777,11 @@ button {
 .line-chart-summary { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin: .45rem 0 .1rem; }
 .line-chart-summary strong { font-size: 1.35rem; }
 .line-chart-summary span { color: var(--text-soft); font-size: .72rem; }
+.chart-hover-detail { min-height: 2.65rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .45rem .65rem; margin: .45rem 0 .25rem; border: 1px dashed var(--border); border-radius: .55rem; background: color-mix(in srgb, var(--surface-muted) 78%, transparent); color: var(--text-soft); font-size: .75rem; }
+.chart-hover-detail span { color: var(--text-faint); font-weight: 750; }
+.chart-hover-detail strong { color: var(--text-soft); font-size: .78rem; text-align: right; }
+.chart-hover-detail.is-visible { border-style: solid; border-color: color-mix(in srgb, #15966a 46%, var(--border)); background: rgb(21 150 106 / 10%); }
+.chart-hover-detail.is-visible span, .chart-hover-detail.is-visible strong { color: var(--text); }
 .line-chart { display: block; width: 100%; height: 12rem; overflow: visible; }
 .line-chart-grid { fill: none; stroke: var(--border); stroke-width: 1; }
 .line-chart-area { fill: rgb(21 150 106 / 12%); }
