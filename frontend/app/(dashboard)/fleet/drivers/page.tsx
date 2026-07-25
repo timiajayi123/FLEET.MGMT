@@ -22,6 +22,7 @@ type Mode = { type: 'create'; driver?: undefined } | { type: 'edit'; driver: Dri
 type DriverDetails = {
   driver: Driver;
   vehicles: Array<{ id: string; registrationNumber: string; manufacturer: string; model: string; status: string; vehicleType?: { name: string } | null }>;
+  allocations: Array<{ id: string; status: string; destination?: string | null; purpose: string; startAt: string; expectedEndAt: string; vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string } }>;
   summary: { totalTrips: number; completedTrips: number; activeTrips: number; averageSpeed: number | null; totalDistance: number };
 };
 
@@ -150,14 +151,14 @@ export default function DriversPage() {
             </thead>
             <tbody>
               {sortedItems.map((driver) => (
-                <tr key={driver.id}>
+                <tr key={driver.id} className="driver-list-row" onClick={() => void viewDetails(driver)}>
                   <td>{driver.serialNumber || '—'}</td>
                   <td>
                     {driver.passportMimeType && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img className="avatar" src={`/api/drivers/${driver.id}/passport`} alt="" />
                     )}
-                    {driver.staffName}
+                    <button className="driver-name-button" onClick={(event) => { event.stopPropagation(); void viewDetails(driver); }}>{driver.staffName}</button>
                   </td>
                   <td>{driver.locationText || '—'}</td>
                   <td>{driver.zone || '—'}</td>
@@ -168,13 +169,13 @@ export default function DriversPage() {
                   <td>{driver.status.replaceAll('_', ' ')}</td>
                   <td>
                     <div className="row-actions">
-                      <button aria-label={`View ${driver.staffName} details`} onClick={() => void viewDetails(driver)}>
+                      <button aria-label={`View ${driver.staffName} details`} onClick={(event) => { event.stopPropagation(); void viewDetails(driver); }}>
                         <Eye size={15} />
                       </button>
-                      <button aria-label={`Edit ${driver.staffName}`} onClick={() => setMode({ type: 'edit', driver })}>
+                      <button aria-label={`Edit ${driver.staffName}`} onClick={(event) => { event.stopPropagation(); setMode({ type: 'edit', driver }); }}>
                         <Pencil size={15} />
                       </button>
-                      <button aria-label={`Delete ${driver.staffName}`} onClick={() => void remove(driver)}>
+                      <button aria-label={`Delete ${driver.staffName}`} onClick={(event) => { event.stopPropagation(); void remove(driver); }}>
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -204,16 +205,18 @@ export default function DriversPage() {
 }
 
 function DriverDetailsModal({ details, onClose }: { details: DriverDetails; onClose: () => void }) {
-  const { driver, vehicles, summary } = details;
+  const { driver, vehicles, allocations, summary } = details;
   return <div className="master-modal-backdrop"><section className="master-modal wide-modal driver-details-modal" role="dialog" aria-modal="true">
     <header><div><span>Driver profile</span><h2>{driver.staffName}</h2><p>{driver.employeeId} · {driver.category || 'Driver'}</p></div><button onClick={onClose} aria-label="Close driver details">x</button></header>
     <div className="driver-detail-stats">
       <div><Route size={18} /><span>Total trips</span><strong>{summary.totalTrips}</strong></div>
       <div><CarFront size={18} /><span>Completed trips</span><strong>{summary.completedTrips}</strong></div>
+      <div><Route size={18} /><span>Active trips</span><strong>{summary.activeTrips}</strong></div>
       <div><Gauge size={18} /><span>Average speed</span><strong>{summary.averageSpeed == null ? '—' : `${Math.round(summary.averageSpeed)} km/h`}</strong></div>
       <div><Route size={18} /><span>Distance recorded</span><strong>{summary.totalDistance.toFixed(1)} km</strong></div>
     </div>
-    <section className="driver-detail-section"><h3>Vehicles allocated</h3>{vehicles.length ? <div className="driver-vehicle-list">{vehicles.map((vehicle) => <div key={vehicle.id}><CarFront size={18} /><span><strong>{vehicle.registrationNumber}</strong><small>{vehicle.manufacturer} {vehicle.model}{vehicle.vehicleType?.name ? ` · ${vehicle.vehicleType.name}` : ''}</small></span><em>{vehicle.status.replaceAll('_', ' ')}</em></div>)}</div> : <p>No vehicle allocations recorded for this driver.</p>}</section>
+    <section className="driver-detail-section"><h3>Previously assigned vehicles</h3>{vehicles.length ? <div className="driver-vehicle-list">{vehicles.map((vehicle) => <div key={vehicle.id}><CarFront size={18} /><span><strong>{vehicle.registrationNumber}</strong><small>{vehicle.manufacturer} {vehicle.model}{vehicle.vehicleType?.name ? ` · ${vehicle.vehicleType.name}` : ''}</small></span><em>{vehicle.status.replaceAll('_', ' ')}</em></div>)}</div> : <p>No vehicle allocations recorded for this driver.</p>}</section>
+    <section className="driver-detail-section"><h3>Assignment history</h3>{allocations.length ? <div className="driver-assignment-list">{allocations.map((allocation) => <div key={allocation.id}><CarFront size={16} /><span><strong>{allocation.vehicle.registrationNumber} · {allocation.vehicle.manufacturer} {allocation.vehicle.model}</strong><small>{new Date(allocation.startAt).toLocaleDateString()} – {new Date(allocation.expectedEndAt).toLocaleDateString()} · {allocation.destination || allocation.purpose}</small></span><em>{allocation.status.replaceAll('_', ' ')}</em></div>)}</div> : <p>No assignment history recorded for this driver.</p>}</section>
     <footer><button className="primary-action" onClick={onClose}>Close</button></footer>
   </section></div>;
 }
