@@ -18,6 +18,7 @@ model Directorate {
   departments Department[]
   requests    VehicleRequest[]
   users       User[]
+  fuelBudgets FuelBudget[]
   createdAt   DateTime         @default(now()) @db.DateTime2
   updatedAt   DateTime         @updatedAt @db.DateTime2
 
@@ -37,6 +38,7 @@ model Department {
   units         Unit[]
   requests      VehicleRequest[]
   users         User[]
+  fuelBudgets   FuelBudget[]
   createdAt     DateTime         @default(now()) @db.DateTime2
   updatedAt     DateTime         @updatedAt @db.DateTime2
 
@@ -79,6 +81,8 @@ model Location {
   users       User[]
   vehicles    Vehicle[]
   drivers     Driver[]
+  fuelCards   FuelCard[]
+  fuelBudgets FuelBudget[]
   createdAt   DateTime         @default(now()) @db.DateTime2
   updatedAt   DateTime         @updatedAt @db.DateTime2
 
@@ -147,6 +151,9 @@ model User {
   assignedAllocations VehicleAllocation[]  @relation("AllocationAssigner")
   maintenanceReports  MaintenanceRequest[] @relation("MaintenanceReporter")
   maintenanceReviews  MaintenanceRequest[] @relation("MaintenanceReviewer")
+  fuelEntriesCreated  FuelEntry[]          @relation("FuelEntryCreator")
+  fuelApprovals       FuelApproval[]       @relation("FuelApprovalActor")
+  fuelAuditLogs       FuelAuditLog[]       @relation("FuelAuditActor")
   createdAt           DateTime             @default(now()) @db.DateTime2
   updatedAt           DateTime             @updatedAt @db.DateTime2
 
@@ -191,6 +198,9 @@ model Vehicle {
   locationHistory            DriverLocationHistory[]
   trips                      Trip[]
   maintenanceRequests        MaintenanceRequest[]
+  fuelEntries                FuelEntry[]
+  fuelCards                  FuelCard[]
+  fuelBaseline               VehicleFuelBaseline?
 
   @@index([status, registrationNumber])
   @@map("vehicles")
@@ -246,6 +256,8 @@ model Driver {
   currentLocation  DriverCurrentLocation?
   locationHistory  DriverLocationHistory[]
   trips            Trip[]
+  fuelEntries      FuelEntry[]
+  fuelCards        FuelCard[]
 
   @@index([status, staffName])
   @@index([licenceNumber])
@@ -277,6 +289,7 @@ model VehicleAllocation {
   updatedAt        DateTime                @updatedAt @db.DateTime2
   currentLocations DriverCurrentLocation[]
   locationHistory  DriverLocationHistory[]
+  fuelEntries      FuelEntry[]
 
   @@index([status, startAt])
   @@index([vehicleId, status])
@@ -436,6 +449,7 @@ model Trip {
   driver             Driver                  @relation(fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   currentLocations   DriverCurrentLocation[]
   locationHistory    DriverLocationHistory[]
+  fuelEntries        FuelEntry[]
   createdAt          DateTime                @default(now()) @db.DateTime2
   updatedAt          DateTime                @updatedAt @db.DateTime2
 
@@ -444,4 +458,324 @@ model Trip {
   @@index([driverId, startedAt])
   @@index([requestId])
   @@map("trips")
+}
+
+model FuelVendor {
+  id        String        @id @default(uuid()) @db.UniqueIdentifier
+  name      String        @unique
+  contact   String?
+  email     String?
+  phone     String?
+  status    String        @default("ACTIVE")
+  notes     String?       @db.NVarChar(2000)
+  stations  FuelStation[]
+  entries   FuelEntry[]
+  prices    FuelPrice[]
+  createdAt DateTime      @default(now()) @db.DateTime2
+  updatedAt DateTime      @updatedAt @db.DateTime2
+
+  @@index([status, name])
+  @@map("fuel_vendors")
+}
+
+model FuelStation {
+  id        String      @id @default(uuid()) @db.UniqueIdentifier
+  vendorId  String?     @db.UniqueIdentifier
+  name      String
+  brand     String?
+  address   String?     @db.NVarChar(1000)
+  state     String
+  city      String?
+  latitude  Decimal?    @db.Decimal(10, 7)
+  longitude Decimal?    @db.Decimal(10, 7)
+  contact   String?
+  status    String      @default("ACTIVE")
+  vendor    FuelVendor? @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  prices    FuelPrice[]
+  entries   FuelEntry[]
+  cards     FuelCard[]  @relation("FuelCardStation")
+  createdAt DateTime    @default(now()) @db.DateTime2
+  updatedAt DateTime    @updatedAt @db.DateTime2
+
+  @@unique([name, state, city])
+  @@index([status, state, city])
+  @@index([vendorId])
+  @@map("fuel_stations")
+}
+
+model FuelPrice {
+  id            String       @id @default(uuid()) @db.UniqueIdentifier
+  stationId     String?      @db.UniqueIdentifier
+  vendorId      String?      @db.UniqueIdentifier
+  state         String
+  fuelType      String
+  effectiveDate DateTime     @db.Date
+  pricePerLitre Decimal      @db.Decimal(18, 2)
+  tolerancePct  Decimal      @default(10) @db.Decimal(6, 2)
+  status        String       @default("ACTIVE")
+  station       FuelStation? @relation(fields: [stationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor        FuelVendor?  @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt     DateTime     @default(now()) @db.DateTime2
+  updatedAt     DateTime     @updatedAt @db.DateTime2
+
+  @@index([state, fuelType, effectiveDate])
+  @@index([stationId, effectiveDate])
+  @@map("fuel_prices")
+}
+
+model FuelCard {
+  id               String                @id @default(uuid()) @db.UniqueIdentifier
+  cardNumber       String                @unique
+  maskedNumber     String
+  provider         String
+  encryptedPin     String?               @db.NVarChar(2000)
+  status           String                @default("ACTIVE")
+  issueDate        DateTime              @db.Date
+  expiryDate       DateTime?             @db.Date
+  vehicleId        String?               @db.UniqueIdentifier
+  driverId         String?               @db.UniqueIdentifier
+  officeId         String?               @db.UniqueIdentifier
+  monthlyLimit     Decimal?              @db.Decimal(18, 2)
+  dailyLimit       Decimal?              @db.Decimal(18, 2)
+  transactionLimit Decimal?              @db.Decimal(18, 2)
+  currentBalance   Decimal?              @db.Decimal(18, 2)
+  allowedFuelTypes String?               @db.NVarChar(1000)
+  allowedStates    String?               @db.NVarChar(1000)
+  allowedStationId String?               @db.UniqueIdentifier
+  notes            String?               @db.NVarChar(2000)
+  vehicle          Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver           Driver?               @relation(fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  office           Location?             @relation(fields: [officeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  allowedStation   FuelStation?          @relation("FuelCardStation", fields: [allowedStationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entries          FuelEntry[]
+  transactions     FuelCardTransaction[]
+  createdAt        DateTime              @default(now()) @db.DateTime2
+  updatedAt        DateTime              @updatedAt @db.DateTime2
+
+  @@index([status, expiryDate])
+  @@index([vehicleId])
+  @@index([driverId])
+  @@map("fuel_cards")
+}
+
+model FuelCardTransaction {
+  id                String     @id @default(uuid()) @db.UniqueIdentifier
+  fuelCardId        String     @db.UniqueIdentifier
+  fuelEntryId       String?    @unique @db.UniqueIdentifier
+  transactionNumber String     @unique
+  amount            Decimal    @db.Decimal(18, 2)
+  transactionAt     DateTime   @db.DateTime2
+  status            String     @default("PENDING")
+  reconciliationRef String?
+  notes             String?    @db.NVarChar(2000)
+  card              FuelCard   @relation(fields: [fuelCardId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fuelEntry         FuelEntry? @relation(fields: [fuelEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt         DateTime   @default(now()) @db.DateTime2
+  updatedAt         DateTime   @updatedAt @db.DateTime2
+
+  @@index([fuelCardId, transactionAt])
+  @@map("fuel_card_transactions")
+}
+
+model VehicleFuelBaseline {
+  id                     String   @id @default(uuid()) @db.UniqueIdentifier
+  vehicleId              String   @unique @db.UniqueIdentifier
+  expectedKmPerLitre     Decimal? @db.Decimal(12, 3)
+  manufacturerKmPerLitre Decimal? @db.Decimal(12, 3)
+  tankCapacityLitres     Decimal? @db.Decimal(12, 3)
+  acceptableTolerancePct Decimal  @default(10) @db.Decimal(6, 2)
+  vehicle                Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt              DateTime @default(now()) @db.DateTime2
+  updatedAt              DateTime @updatedAt @db.DateTime2
+
+  @@map("vehicle_fuel_baselines")
+}
+
+model FuelBudget {
+  id            String       @id @default(uuid()) @db.UniqueIdentifier
+  name          String
+  fiscalYear    Int
+  month         Int?
+  amount        Decimal      @db.Decimal(18, 2)
+  committed     Decimal      @default(0) @db.Decimal(18, 2)
+  spent         Decimal      @default(0) @db.Decimal(18, 2)
+  directorateId String?      @db.UniqueIdentifier
+  departmentId  String?      @db.UniqueIdentifier
+  officeId      String?      @db.UniqueIdentifier
+  status        String       @default("ACTIVE")
+  directorate   Directorate? @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department    Department?  @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  office        Location?    @relation(fields: [officeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt     DateTime     @default(now()) @db.DateTime2
+  updatedAt     DateTime     @updatedAt @db.DateTime2
+
+  @@index([fiscalYear, month, status])
+  @@index([departmentId])
+  @@map("fuel_budgets")
+}
+
+model FuelEntry {
+  id                    String               @id @default(uuid()) @db.UniqueIdentifier
+  entryNumber           String               @unique
+  vehicleId             String               @db.UniqueIdentifier
+  driverId              String               @db.UniqueIdentifier
+  allocationId          String               @db.UniqueIdentifier
+  tripId                String?              @db.UniqueIdentifier
+  createdById           String               @db.UniqueIdentifier
+  fuelCardId            String?              @db.UniqueIdentifier
+  stationId             String?              @db.UniqueIdentifier
+  vendorId              String?              @db.UniqueIdentifier
+  fuelingAt             DateTime             @db.DateTime2
+  entryType             String               @default("REFUEL")
+  fuelType              String
+  entryStatus           String               @default("DRAFT")
+  approvalStatus        String               @default("DRAFT")
+  reason                String?              @db.NVarChar(1000)
+  comments              String?              @db.NVarChar(2000)
+  vehicleRegistration   String
+  driverName            String
+  driverEmployeeId      String
+  allocationSnapshot    String?              @db.NVarChar(100)
+  tripSnapshot          String?              @db.NVarChar(100)
+  departmentName        String?
+  directorateName       String?
+  officeName            String?
+  unitName              String?
+  supervisorName        String?
+  state                 String?
+  city                  String?
+  pumpNumber            String?
+  fuelLevelBefore       Decimal?             @db.Decimal(6, 2)
+  fuelLevelAfter        Decimal?             @db.Decimal(6, 2)
+  requestedLitres       Decimal?             @db.Decimal(18, 3)
+  dispensedLitres       Decimal              @db.Decimal(18, 3)
+  approvedPricePerLitre Decimal?             @db.Decimal(18, 2)
+  pricePerLitre         Decimal              @db.Decimal(18, 2)
+  totalAmount           Decimal              @db.Decimal(18, 2)
+  paymentMethod         String
+  cardTransactionNumber String?
+  receiptNumber         String?
+  vendorInvoice         String?
+  previousOdometer      Decimal?             @db.Decimal(18, 2)
+  currentOdometer       Decimal?             @db.Decimal(18, 2)
+  distanceTravelled     Decimal?             @db.Decimal(18, 2)
+  gpsDistance           Decimal?             @db.Decimal(18, 2)
+  tripDistance          Decimal?             @db.Decimal(18, 2)
+  engineHours           Decimal?             @db.Decimal(18, 2)
+  distanceSource        String?
+  kmPerLitre            Decimal?             @db.Decimal(18, 4)
+  litresPer100Km        Decimal?             @db.Decimal(18, 4)
+  costPerKm             Decimal?             @db.Decimal(18, 4)
+  baselineDifference    Decimal?             @db.Decimal(18, 4)
+  baselineVariancePct   Decimal?             @db.Decimal(8, 2)
+  latitude              Decimal?             @db.Decimal(10, 7)
+  longitude             Decimal?             @db.Decimal(10, 7)
+  submittedAt           DateTime?            @db.DateTime2
+  approvedAt            DateTime?            @db.DateTime2
+  postedAt              DateTime?            @db.DateTime2
+  vehicle               Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver                Driver               @relation(fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  allocation            VehicleAllocation    @relation(fields: [allocationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trip                  Trip?                @relation(fields: [tripId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy             User                 @relation("FuelEntryCreator", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fuelCard              FuelCard?            @relation(fields: [fuelCardId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  station               FuelStation?         @relation(fields: [stationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  vendor                FuelVendor?          @relation(fields: [vendorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  attachments           FuelAttachment[]
+  approvals             FuelApproval[]
+  alerts                FuelAlert[]
+  reconciliation        FuelReconciliation?
+  auditLogs             FuelAuditLog[]
+  cardTransaction       FuelCardTransaction?
+  createdAt             DateTime             @default(now()) @db.DateTime2
+  updatedAt             DateTime             @updatedAt @db.DateTime2
+
+  @@index([vehicleId, fuelingAt])
+  @@index([driverId, fuelingAt])
+  @@index([allocationId, fuelingAt])
+  @@index([tripId])
+  @@index([approvalStatus, fuelingAt])
+  @@index([receiptNumber])
+  @@map("fuel_entries")
+}
+
+model FuelApproval {
+  id          String    @id @default(uuid()) @db.UniqueIdentifier
+  fuelEntryId String    @db.UniqueIdentifier
+  actorId     String?   @db.UniqueIdentifier
+  stage       String
+  status      String    @default("PENDING")
+  comment     String?   @db.NVarChar(2000)
+  actedAt     DateTime? @db.DateTime2
+  fuelEntry   FuelEntry @relation(fields: [fuelEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor       User?     @relation("FuelApprovalActor", fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt   DateTime  @default(now()) @db.DateTime2
+
+  @@index([fuelEntryId, stage])
+  @@index([status, stage])
+  @@map("fuel_approvals")
+}
+
+model FuelAttachment {
+  id          String    @id @default(uuid()) @db.UniqueIdentifier
+  fuelEntryId String    @db.UniqueIdentifier
+  kind        String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  data        Bytes
+  fuelEntry   FuelEntry @relation(fields: [fuelEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt   DateTime  @default(now()) @db.DateTime2
+
+  @@index([fuelEntryId, kind])
+  @@map("fuel_attachments")
+}
+
+model FuelAlert {
+  id          String     @id @default(uuid()) @db.UniqueIdentifier
+  fuelEntryId String?    @db.UniqueIdentifier
+  alertType   String
+  severity    String     @default("WARNING")
+  message     String     @db.NVarChar(2000)
+  status      String     @default("OPEN")
+  resolvedAt  DateTime?  @db.DateTime2
+  fuelEntry   FuelEntry? @relation(fields: [fuelEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt   DateTime   @default(now()) @db.DateTime2
+
+  @@index([status, severity, createdAt])
+  @@index([fuelEntryId])
+  @@map("fuel_alerts")
+}
+
+model FuelReconciliation {
+  id               String    @id @default(uuid()) @db.UniqueIdentifier
+  fuelEntryId      String    @unique @db.UniqueIdentifier
+  reconciledAmount Decimal?  @db.Decimal(18, 2)
+  varianceAmount   Decimal?  @db.Decimal(18, 2)
+  status           String    @default("PENDING")
+  notes            String?   @db.NVarChar(2000)
+  reconciledAt     DateTime? @db.DateTime2
+  fuelEntry        FuelEntry @relation(fields: [fuelEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt        DateTime  @default(now()) @db.DateTime2
+  updatedAt        DateTime  @updatedAt @db.DateTime2
+
+  @@index([status, createdAt])
+  @@map("fuel_reconciliations")
+}
+
+model FuelAuditLog {
+  id          String     @id @default(uuid()) @db.UniqueIdentifier
+  fuelEntryId String?    @db.UniqueIdentifier
+  actorId     String?    @db.UniqueIdentifier
+  action      String
+  entityType  String
+  entityId    String
+  details     String?    @db.NVarChar(4000)
+  fuelEntry   FuelEntry? @relation(fields: [fuelEntryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor       User?      @relation("FuelAuditActor", fields: [actorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt   DateTime   @default(now()) @db.DateTime2
+
+  @@index([entityType, entityId, createdAt])
+  @@index([fuelEntryId])
+  @@map("fuel_audit_logs")
 }

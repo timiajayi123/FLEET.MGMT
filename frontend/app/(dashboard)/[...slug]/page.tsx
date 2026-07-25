@@ -2,6 +2,7 @@ import { ModulePlaceholder } from '@/components/module-placeholder';
 import { FleetAssistant } from '@/components/fleet-assistant';
 import { VehicleRequestReport } from '@/components/vehicle-request-report';
 import { MaintenanceWorkspace } from '@/components/maintenance-workspace';
+import { FuelWorkspace } from '@/components/fuel-workspace';
 import { moduleMetadata } from '@/components/navigation';
 import { notFound, redirect } from 'next/navigation';
 
@@ -15,6 +16,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (path === '/analytics/dashboard') redirect('/dashboard');
   if (path === '/analytics/reports') return <VehicleRequestReport />;
   if (path === '/operations/maintenance') return <MaintenanceWorkspace />;
+  if (path === '/operations/fuel-management') return <FuelWorkspace />;
   if (path === '/ai/fleet-optimization') return <FleetAssistant />;
 
   return (
