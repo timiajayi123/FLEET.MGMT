@@ -30,7 +30,7 @@ export class AnalyticsService {
       tripPurpose: counts(requestRows.map((row) => row.tripCategory ?? row.purposeOfTrip)),
       requestsByDepartment: counts(requestRows.map((row) => row.department)),
       mostUsedVehicles: top(counts(tripRows.map((row) => row.vehicle.registrationNumber))),
-      mostActiveDrivers: top(counts(tripRows.map((row) => row.driver.staffName))),
+      mostActiveDrivers: top(counts(tripRows.map((row) => row.driver?.staffName ?? 'Unassigned driver'))),
     };
   }
 
@@ -41,7 +41,7 @@ export class AnalyticsService {
     });
     const valid = history.filter((point) => point.speed !== null && point.speed >= 0 && point.speed <= 250);
     const violations = valid.filter((point) => point.speed! > threshold);
-    return { threshold, records: valid.length, averageSpeed: valid.length ? valid.reduce((sum, point) => sum + point.speed!, 0) / valid.length : null, maximumSpeed: valid.length ? Math.max(...valid.map((point) => point.speed!)) : null, violations: violations.map((point) => ({ id: point.id, speed: point.speed, recordedAt: point.recordedAt, latitude: point.latitude, longitude: point.longitude, driver: point.driver.staffName, vehicle: point.vehicle?.registrationNumber ?? null, trip: point.trip?.request?.requestNumber ?? point.tripId })), trend: valid.slice().reverse().map((point) => ({ recordedAt: point.recordedAt, speed: point.speed, driver: point.driver.staffName })) };
+    return { threshold, records: valid.length, averageSpeed: valid.length ? valid.reduce((sum, point) => sum + point.speed!, 0) / valid.length : null, maximumSpeed: valid.length ? Math.max(...valid.map((point) => point.speed!)) : null, violations: violations.map((point) => ({ id: point.id, speed: point.speed, recordedAt: point.recordedAt, latitude: point.latitude, longitude: point.longitude, driver: point.driver?.staffName ?? 'Unassigned driver', vehicle: point.vehicle?.registrationNumber ?? null, trip: point.trip?.request?.requestNumber ?? point.tripId })), trend: valid.slice().reverse().map((point) => ({ recordedAt: point.recordedAt, speed: point.speed, driver: point.driver?.staffName ?? 'Unassigned driver' })) };
   }
 
   async report(filters: AnalyticsFilters) {

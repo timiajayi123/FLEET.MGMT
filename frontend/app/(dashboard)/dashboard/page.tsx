@@ -67,8 +67,10 @@ export default function DashboardPage() {
         <DriverDashboard data={data} />
       ) : data?.role === 'STAFF' ? (
         <StaffDashboard data={data} />
-      ) : (
+      ) : data?.role === 'ADMIN' ? (
         <AdminDashboard data={data} />
+      ) : (
+        <section className="panel"><p>Loading your dashboard…</p></section>
       )}
     </section>
   );
