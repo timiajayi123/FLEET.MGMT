@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, ClipboardList, Wrench, XCircle } from 'lucide-react';
+import { CheckCircle2, ClipboardList, LoaderCircle, Wrench, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from './page-header';
@@ -14,10 +14,12 @@ export function MaintenanceWorkspace() {
   const [canReview, setCanReview] = useState<boolean | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<MaintenanceRequest | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       setError('');
       const [requestResponse, vehicleResponse] = await Promise.all([
@@ -37,6 +39,8 @@ export function MaintenanceWorkspace() {
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to load maintenance.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -79,6 +83,7 @@ export function MaintenanceWorkspace() {
 
   return <>
     <PageHeader title="Vehicle Maintenance" description={canReview === true ? 'Review driver-submitted vehicle fault reports and record the fleet maintenance decision.' : 'Report a fault for a vehicle allocated to you. Fleet administrators will review it.'} />
+    {loading ? <section className="maintenance-loading" aria-live="polite"><LoaderCircle size={30} /><div><strong>Loading maintenance workspace</strong><p>Retrieving requests, vehicle details and maintenance decisions…</p></div></section> : <>
     <section className="maintenance-layout">
       {canReview === false && <article className="panel maintenance-form-panel">
         <div className="panel-heading"><div><h2>Report a vehicle issue</h2><p>Select the vehicle, fault type, date and a clear description.</p></div><Wrench size={20} /></div>
@@ -104,6 +109,7 @@ export function MaintenanceWorkspace() {
         </article>)}</div> : <div className="master-empty"><Wrench size={28} /><h2>{canReview === null ? 'Loading maintenance requests' : 'No maintenance requests'}</h2><p>{canReview === true ? 'Driver-submitted fault reports will appear here for review.' : 'Your submitted vehicle fault reports will appear here.'}</p></div>}
       </article>
     </section>
+    </>}
     {message && <div className="maintenance-toast"><CheckCircle2 size={18} /> {message}</div>}
     {error && <div className="master-alert">{error}</div>}
     {selected && <div className="master-modal-backdrop"><section className="maintenance-review-modal" role="dialog" aria-modal="true">
