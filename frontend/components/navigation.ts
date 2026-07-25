@@ -3,6 +3,7 @@ import {
   Building2,
   CarFront,
   ClipboardList,
+  CreditCard,
   Fuel,
   LayoutDashboard,
   Map as MapIcon,
@@ -65,8 +66,16 @@ export const navigation: NavigationGroup[] = [
     label: 'Operations',
     items: [
       { label: 'GPS Tracking', href: '/operations/gps-tracking', icon: MapIcon, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
-      { label: 'Fuel Management', href: '/operations/fuel-management', icon: Fuel, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
       { label: 'Maintenance', href: '/operations/maintenance', icon: Wrench, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
+    ],
+  },
+  {
+    label: 'Fuel',
+    items: [
+      { label: 'Fuel Dashboard', href: '/fuel/dashboard', icon: LayoutDashboard, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
+      { label: 'Fuel Operations', href: '/fuel/operations', icon: Fuel, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
+      { label: 'Fuel Cards', href: '/fuel/cards', icon: CreditCard, roles: ['S_ADMIN', 'FM'] },
+      { label: 'Stations & Prices', href: '/fuel/stations', icon: MapPin, roles: ['S_ADMIN', 'FM'] },
     ],
   },
   {
@@ -139,6 +148,7 @@ export function visibleNavigation(roleCode?: string) {
 export function canAccessPath(pathname: string, roleCode?: string) {
   if (!roleCode) return false;
   if (pathname === '/dashboard' || pathname === '/profile') return true;
+  if (pathname === '/operations/fuel-management') return ['S_ADMIN', 'FM', 'DRIVER'].includes(roleCode);
   const items = navigation
     .flatMap((group) => group.items)
     .sort((a, b) => b.href.length - a.href.length);
