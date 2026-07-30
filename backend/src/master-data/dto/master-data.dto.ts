@@ -116,7 +116,7 @@ export class MasterDataQueryDto {
   @Transform(({ value }: { value: unknown }) => (value === undefined ? 20 : Number(value)))
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(1000)
   limit = 20;
 
   @IsOptional()

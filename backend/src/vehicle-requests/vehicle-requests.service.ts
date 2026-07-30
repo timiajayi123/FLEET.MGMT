@@ -52,26 +52,26 @@ export class VehicleRequestsService {
       throw new BadRequestException('Attachment must be a PDF, JPEG, or PNG file.');
     }
 
-    const [location, directorate, department, unit, vehicleType] = await Promise.all([
+    const [location, directorate, department, vehicleType] = await Promise.all([
       dto.locationId ? this.prisma.location.findFirst({ where: { id: dto.locationId, status: MasterDataStatus.ACTIVE } }) : null,
       this.prisma.directorate.findFirst({
         where: { id: dto.directorateId, status: MasterDataStatus.ACTIVE },
       }),
       dto.departmentId ? this.prisma.department.findFirst({ where: { id: dto.departmentId, status: MasterDataStatus.ACTIVE } }) : null,
-      dto.unitId ? this.prisma.unit.findFirst({ where: { id: dto.unitId, status: MasterDataStatus.ACTIVE } }) : null,
       this.prisma.vehicleType.findFirst({
         where: { id: dto.vehicleTypeId, status: MasterDataStatus.ACTIVE },
       }),
     ]);
 
-    if (!directorate || !vehicleType || (dto.locationId && !location) || (dto.departmentId && !department) || (dto.unitId && !unit)) {
+    if (!directorate || !vehicleType || (dto.locationId && !location) || (dto.departmentId && !department)) {
       throw new BadRequestException('One or more selected master-data records are unavailable.');
     }
     if (department && department.directorateId !== directorate.id) {
       throw new BadRequestException('The selected department does not match the directorate.');
     }
-    if (unit && (!department || unit.departmentId !== department.id)) {
-      throw new BadRequestException('The selected directorate, department, and unit do not match.');
+    const destinationFrom = (location?.name ?? dto.customPickupLocation ?? '').trim();
+    if (destinationFrom.localeCompare(dto.destination.trim(), undefined, { sensitivity: 'accent' }) === 0) {
+      throw new BadRequestException('Destination From and Destination To must be different.');
     }
 
     const request = await this.prisma.vehicleRequest.create({
@@ -83,12 +83,12 @@ export class VehicleRequestsService {
         locationId: location?.id,
         directorateId: directorate.id,
         departmentId: department?.id,
-        unitId: unit?.id,
+        unitId: null,
         vehicleTypeId: vehicleType.id,
         location: location?.name ?? dto.customPickupLocation!,
         directorate: directorate.name,
         department: department?.name ?? dto.customDepartment!,
-        unit: unit?.name ?? dto.customUnit!,
+        unit: dto.customUnit,
         purposeOfTrip: dto.purposeOfTrip,
         tripCategory: dto.purposeOfTrip,
         vehicleTypeName: vehicleType.name,
@@ -96,10 +96,10 @@ export class VehicleRequestsService {
         customPickupLocation: dto.customPickupLocation || null,
         customDestination: dto.customDestination || null,
         customDepartment: dto.customDepartment || null,
-        customUnit: dto.customUnit || null,
+        customUnit: dto.customUnit,
         departureDate,
         expectedReturnDate,
-        numberOfPassengers: dto.numberOfPassengers,
+        numberOfPassengers: dto.numberOfPassengers ?? 0,
         priority: dto.priority,
         remarks: dto.remarks || null,
         attachmentFileName: attachment?.originalname,

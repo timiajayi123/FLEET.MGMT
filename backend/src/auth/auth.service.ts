@@ -7,12 +7,11 @@ import { verifyPassword } from './password';
 export const SESSION_COOKIE = 'fleet_session';
 export const publicUserSelect = {
   id: true, email: true, staffName: true, employeeId: true, phone: true, status: true, passportMimeType: true,
-  roleId: true, locationId: true, directorateId: true, departmentId: true, unitId: true,
+  roleId: true, locationId: true, directorateId: true, departmentId: true,
   role: { select: { id: true, code: true, name: true } },
   location: { select: { id: true, code: true, name: true } },
   directorate: { select: { id: true, code: true, name: true } },
   department: { select: { id: true, code: true, name: true } },
-  unit: { select: { id: true, code: true, name: true } },
   createdAt: true, updatedAt: true,
 } as const;
 

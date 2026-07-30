@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { BaselineDto, CreateFuelEntryDto, DecisionDto, FuelCardDto, FuelPriceDto, StationDto } from './fuel.dto';
 
-type SessionUser = { id: string; employeeId: string; staffName: string; role: { code: string }; departmentId?: string | null; directorateId?: string | null; locationId?: string | null; unitId?: string | null };
+type SessionUser = { id: string; employeeId: string; staffName: string; role: { code: string }; departmentId?: string | null; directorateId?: string | null; locationId?: string | null };
 const MANAGERS = ['S_ADMIN', 'FM'];
 const APPROVAL_STAGES = ['FLEET_SUPERVISOR', 'FLEET_MANAGER', 'FINANCE'];
 const DECIMAL = (value: number | null | undefined, scale = 4) => value === null || value === undefined ? null : Number(value.toFixed(scale));
@@ -67,7 +67,7 @@ export class FuelService {
         vehicleId: context.vehicle.id, driverId: context.driver.id, allocationId: context.allocation.id, tripId: context.trip?.id ?? null, createdById: user.id, stationId: context.station?.id ?? null, fuelCardId: dto.fuelCardId ?? null, vendorId: context.station?.vendorId ?? null,
         fuelingAt: new Date(dto.fuelingAt), entryType: dto.entryType || 'REFUEL', fuelType: dto.fuelType, entryStatus: submitting ? 'SUBMITTED' : 'DRAFT', approvalStatus, reason: dto.reason || null, comments: dto.comments || null,
         vehicleRegistration: context.vehicle.registrationNumber, driverName: context.driver.staffName, driverEmployeeId: context.driver.employeeId, allocationSnapshot: context.allocation.id, tripSnapshot: context.trip?.id ?? null,
-        departmentName: user.departmentId ? await this.nameOf('department', user.departmentId) : null, directorateName: user.directorateId ? await this.nameOf('directorate', user.directorateId) : null, officeName: user.locationId ? await this.nameOf('location', user.locationId) : null, unitName: user.unitId ? await this.nameOf('unit', user.unitId) : null, supervisorName: context.allocation.assignedBy?.staffName ?? null,
+        departmentName: user.departmentId ? await this.nameOf('department', user.departmentId) : null, directorateName: user.directorateId ? await this.nameOf('directorate', user.directorateId) : null, officeName: user.locationId ? await this.nameOf('location', user.locationId) : null, unitName: null, supervisorName: context.allocation.assignedBy?.staffName ?? null,
         state: dto.state ?? context.station?.state ?? null, city: dto.city ?? context.station?.city ?? null, pumpNumber: dto.pumpNumber || null, fuelLevelBefore: dto.fuelLevelBefore ?? null, fuelLevelAfter: dto.fuelLevelAfter ?? null, requestedLitres: dto.requestedLitres ?? null, dispensedLitres: litres, approvedPricePerLitre: approvedPrice?.pricePerLitre ?? null, pricePerLitre: price, totalAmount: total, paymentMethod: dto.paymentMethod, cardTransactionNumber: dto.cardTransactionNumber || null, receiptNumber: dto.receiptNumber || null, vendorInvoice: dto.vendorInvoice || null,
         previousOdometer: priorOdometer, currentOdometer: dto.currentOdometer ?? null, distanceTravelled: distance, gpsDistance: dto.gpsDistance ?? null, tripDistance: context.trip?.calculatedDistance ?? null, engineHours: dto.engineHours ?? null, distanceSource: dto.currentOdometer !== undefined ? 'ODOMETER' : context.trip ? 'TRIP' : dto.gpsDistance !== undefined ? 'GPS' : null, kmPerLitre, litresPer100Km, costPerKm, baselineDifference, baselineVariancePct, latitude: dto.latitude ?? null, longitude: dto.longitude ?? null, submittedAt: submitting ? new Date() : null,
       }, include: entryInclude });
@@ -158,11 +158,10 @@ export class FuelService {
   }
 
   private async requireDriver(user: SessionUser) { const driver = await this.prisma.driver.findUnique({ where: { employeeId: user.employeeId } }); if (!driver) throw new BadRequestException('Your account is not linked to a driver profile.'); return driver; }
-  private async nameOf(model: 'department' | 'directorate' | 'location' | 'unit', id: string) {
+  private async nameOf(model: 'department' | 'directorate' | 'location', id: string) {
     if (model === 'department') return (await this.prisma.department.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
     if (model === 'directorate') return (await this.prisma.directorate.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
-    if (model === 'location') return (await this.prisma.location.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
-    return (await this.prisma.unit.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
+    return (await this.prisma.location.findUnique({ where: { id }, select: { name: true } }))?.name ?? null;
   }
   private async audit(actorId: string, action: string, entityType: string, entityId: string) { await this.prisma.fuelAuditLog.create({ data: { actorId, action, entityType, entityId } }); }
 }

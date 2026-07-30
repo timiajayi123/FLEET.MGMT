@@ -15,7 +15,7 @@ export class TripsService {
       include: {
         driver: { select: { id: true, staffName: true, employeeId: true, phone: true } },
         vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true } },
-        request: { select: { id: true, requestNumber: true, staffName: true, employeeId: true, purposeOfTrip: true, destination: true, status: true, departureDate: true, expectedReturnDate: true } },
+        request: { select: { id: true, requestNumber: true, staffName: true, employeeId: true, department: true, directorate: true, purposeOfTrip: true, destination: true, status: true, departureDate: true, expectedReturnDate: true } },
         allocation: { select: { id: true, status: true, startAt: true, expectedEndAt: true, actualStartAt: true, actualEndAt: true, destination: true, purpose: true } },
         _count: { select: { locationHistory: true } },
       },

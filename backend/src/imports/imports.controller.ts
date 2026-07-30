@@ -48,6 +48,8 @@ const vehicleExample = [
 const templates = {
   locations:
     'code,name,address,state,description,status,sortOrder\nLAG-HQ,Lagos Headquarters,1 Example Road,Lagos,Main office,ACTIVE,0\n',
+  departments:
+    'directorateCode,code,name,description,sortOrder\nOPS,FLT,Fleet Department,Fleet operations,0\n',
   vehicles: `${vehicleTemplate}\n${vehicleExample}\n`,
   drivers:
     "S/N,DRIVER'S NAME,LOCATION,ZONE,CATEGORY,I D NUMBER,E MAIL,PHONE NUMBER\n1,Jane Driver,Lagos,South West,PERMANENT STAFF,EMP-001,jane@example.com,08000000000\n",
@@ -60,6 +62,11 @@ export class ImportsController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
   locations(@UploadedFile() f: Express.Multer.File) {
     return this.imports.locations(f);
+  }
+  @Post('departments')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  departments(@UploadedFile() f: Express.Multer.File) {
+    return this.imports.departments(f);
   }
   @Post('vehicles')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))

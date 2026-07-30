@@ -41,13 +41,6 @@ export class DepartmentsService extends ResourceService {
   }
 }
 @Injectable()
-export class UnitsService extends ResourceService {
-  protected readonly resource = 'units' as const;
-  constructor(masterData: MasterDataService) {
-    super(masterData);
-  }
-}
-@Injectable()
 export class LocationsService extends ResourceService {
   protected readonly resource = 'locations' as const;
   constructor(masterData: MasterDataService) {

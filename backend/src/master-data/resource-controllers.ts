@@ -22,7 +22,6 @@ import {
   LocationsService,
   ResourceService,
   RolesService,
-  UnitsService,
   VehicleTypesService,
 } from './resource-services';
 
@@ -57,12 +56,6 @@ export class DirectoratesController extends ResourceController {
 @Controller('departments')
 export class DepartmentsController extends ResourceController {
   constructor(service: DepartmentsService) {
-    super(service);
-  }
-}
-@Controller('units')
-export class UnitsController extends ResourceController {
-  constructor(service: UnitsService) {
     super(service);
   }
 }

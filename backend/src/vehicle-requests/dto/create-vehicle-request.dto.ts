@@ -59,17 +59,11 @@ export class CreateVehicleRequestDto {
   @MaxLength(200)
   customDepartment?: string;
 
-  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.customUnit)
-  @IsUUID()
-  @IsOptional()
-  unitId?: string;
-
-  @ValidateIf((dto: CreateVehicleRequestDto) => !dto.unitId)
   @Transform(trim)
   @IsString()
   @IsNotEmpty()
-  @MaxLength(200)
-  customUnit?: string;
+  @Length(2, 200)
+  customUnit!: string;
 
   @Transform(trim)
   @IsString()
@@ -98,18 +92,19 @@ export class CreateVehicleRequestDto {
   @IsDateString({ strict: true })
   expectedReturnDate!: string;
 
-  @Transform(({ value }: { value: unknown }) => Number(value))
+  @Transform(({ value }: { value: unknown }) => value === '' || value === undefined ? undefined : Number(value))
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(100)
-  numberOfPassengers!: number;
+  numberOfPassengers?: number;
 
   @IsEnum(RequestPriority)
   priority!: RequestPriority;
 
   @Transform(trim)
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(2000)
-  remarks!: string;
+  remarks?: string;
 }

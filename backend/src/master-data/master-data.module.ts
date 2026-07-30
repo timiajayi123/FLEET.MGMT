@@ -6,7 +6,6 @@ import {
   DirectoratesController,
   LocationsController,
   RolesController,
-  UnitsController,
   VehicleTypesController,
 } from './resource-controllers';
 import {
@@ -14,7 +13,6 @@ import {
   DirectoratesService,
   LocationsService,
   RolesService,
-  UnitsService,
   VehicleTypesService,
 } from './resource-services';
 
@@ -23,7 +21,6 @@ import {
     MasterDataController,
     DirectoratesController,
     DepartmentsController,
-    UnitsController,
     LocationsController,
     VehicleTypesController,
     RolesController,
@@ -32,7 +29,6 @@ import {
     MasterDataService,
     DirectoratesService,
     DepartmentsService,
-    UnitsService,
     LocationsService,
     VehicleTypesService,
     RolesService,

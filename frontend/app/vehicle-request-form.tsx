@@ -14,6 +14,7 @@ const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/$
 
 export function VehicleRequestForm({ embedded = false }: { embedded?: boolean }) {
   const [state, setState] = useState<SubmissionState>({ type: 'idle' });
+  const [dateError, setDateError] = useState('');
   const [directorateId, setDirectorateId] = useState('');
   const [locationValue, setLocationValue] = useState('');
   const [departmentValue, setDepartmentValue] = useState('');
@@ -49,9 +50,17 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
     const expectedReturnDate = String(formData.get('expectedReturnDate'));
 
     if (new Date(expectedReturnDate) <= new Date(departureDate)) {
-      setState({ type: 'error', message: 'Expected return date must be after departure date.' });
+      const message = 'Expected return date must be after the departure date.';
+      setDateError(message);
+      setState({ type: 'error', message });
+      const returnDateInput = form.elements.namedItem('expectedReturnDate');
+      if (returnDateInput instanceof HTMLInputElement) {
+        returnDateInput.focus();
+        returnDateInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
+    setDateError('');
 
     formData.set('departureDate', new Date(departureDate).toISOString());
     formData.set('expectedReturnDate', new Date(expectedReturnDate).toISOString());
@@ -101,6 +110,17 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
     <form
       className={`request-form ${embedded ? 'embedded' : ''}`}
       onSubmit={handleSubmit}
+      onChange={(event) => {
+        const field = event.target;
+        if (
+          dateError &&
+          field instanceof HTMLInputElement &&
+          ['departureDate', 'expectedReturnDate'].includes(field.name)
+        ) {
+          setDateError('');
+          if (state.type === 'error') setState({ type: 'idle' });
+        }
+      }}
       noValidate
     >
       <section className="form-section" aria-labelledby="staff-heading">
@@ -135,6 +155,12 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             onChange={(value) => {
               setDepartmentValue(value);
             }}
+          />
+          <Field
+            label="Unit"
+            name="customUnit"
+            minLength={2}
+            maxLength={200}
           />
         </div>
       </section>
@@ -189,7 +215,22 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             <small>Select where the trip will end. It must differ from Destination From.</small>
           </label>
           <Field label="Departure Date" name="departureDate" type="datetime-local" />
-          <Field label="Expected Return Date" name="expectedReturnDate" type="datetime-local" />
+          <label className={`field ${dateError ? 'field-invalid' : ''}`}>
+            <span>Expected Return Date</span>
+            <input
+              name="expectedReturnDate"
+              type="datetime-local"
+              required
+              aria-invalid={Boolean(dateError)}
+              aria-describedby={dateError ? 'return-date-error' : undefined}
+            />
+          </label>
+          {dateError && (
+            <p id="return-date-error" className="field-validation-error field-wide" role="alert">
+              <strong>Check the return date</strong>
+              <span>{dateError}</span>
+            </p>
+          )}
           <Field
             label="Number of Passengers"
             name="numberOfPassengers"
@@ -236,7 +277,9 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
         </button>
       </footer>
 
-      <div aria-live="polite" aria-atomic="true">{state.type === 'error' && <p className="alert error">{state.message}</p>}</div>
+      <div aria-live="polite" aria-atomic="true">
+        {state.type === 'error' && !dateError && <p className="alert error">{state.message}</p>}
+      </div>
       {state.type === 'success' && (
         <div className="request-success-backdrop" role="presentation">
           <section className="request-success-modal" role="dialog" aria-modal="true" aria-labelledby="request-success-title">

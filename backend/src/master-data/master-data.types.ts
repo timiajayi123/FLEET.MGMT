@@ -1,7 +1,6 @@
 export const MASTER_DATA_RESOURCES = [
   'directorates',
   'departments',
-  'units',
   'locations',
   'vehicle-types',
   'roles',

@@ -18,6 +18,21 @@ const select = {
   locationId: true,
   passportMimeType: true,
   location: { select: { id: true, name: true, code: true } },
+  allocations: {
+    where: { status: { in: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] as string[] } },
+    orderBy: { startAt: 'desc' as const },
+    take: 1,
+    select: {
+      vehicle: {
+        select: {
+          registrationNumber: true,
+          age: true,
+          serviceability: true,
+          vehicleType: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
   createdAt: true,
   updatedAt: true,
 } as const;

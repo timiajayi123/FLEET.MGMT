@@ -16,7 +16,7 @@ export class AnalyticsService {
       this.prisma.vehicleRequest.count({ where: { ...requestWhere, status: { in: ['APPROVED', 'ALLOCATED'] } } }), this.prisma.vehicleRequest.count({ where: { ...requestWhere, status: 'REJECTED' } }),
       this.prisma.trip.count({ where: tripWhere }), this.prisma.trip.count({ where: { ...tripWhere, status: 'COMPLETED' } }), this.prisma.trip.count({ where: { ...tripWhere, status: 'IN_PROGRESS' } }),
       this.prisma.vehicleRequest.findMany({ where: requestWhere, select: { createdAt: true, status: true, purposeOfTrip: true, tripCategory: true, department: true } }),
-      this.prisma.trip.findMany({ where: tripWhere, select: { createdAt: true, startedAt: true, endedAt: true, calculatedDistance: true, maximumSpeed: true, averageSpeed: true, vehicle: { select: { registrationNumber: true } }, driver: { select: { staffName: true } } } }),
+      this.prisma.trip.findMany({ where: tripWhere, select: { createdAt: true, startedAt: true, endedAt: true, calculatedDistance: true, maximumSpeed: true, averageSpeed: true, vehicle: { select: { registrationNumber: true, manufacturer: true, model: true, vehicleType: { select: { name: true } } } }, driver: { select: { staffName: true } } } }),
     ]);
     const completed = tripRows.filter((trip) => trip.startedAt && trip.endedAt);
     const averageTripDurationMinutes = completed.length ? completed.reduce((total, trip) => total + ((trip.endedAt!.getTime() - trip.startedAt!.getTime()) / 60000), 0) / completed.length : null;
@@ -27,9 +27,15 @@ export class AnalyticsService {
       driverActivity: groupByDate(tripRows.map((row) => ({ date: row.createdAt, value: 1 }))),
       distanceActivity: groupByDate(tripRows.map((row) => ({ date: row.createdAt, value: row.calculatedDistance ?? 0 }))),
       requestStatus: counts(requestRows.map((row) => row.status)),
-      tripPurpose: counts(requestRows.map((row) => row.tripCategory ?? row.purposeOfTrip)),
+      tripPurpose: counts(requestRows.map((row) => normaliseTripPurpose(row.tripCategory ?? row.purposeOfTrip))),
       requestsByDepartment: counts(requestRows.map((row) => row.department)),
-      mostUsedVehicles: top(counts(tripRows.map((row) => row.vehicle.registrationNumber))),
+      mostUsedVehicles: top(counts(tripRows.map((row) => {
+        const vehicleName = (
+          row.vehicle.vehicleType?.name
+          ?? [row.vehicle.manufacturer, row.vehicle.model].filter(Boolean).join(' ')
+        ) || 'Vehicle';
+        return `${row.vehicle.registrationNumber} - ${vehicleName}`;
+      }))),
       mostActiveDrivers: top(counts(tripRows.map((row) => row.driver?.staffName ?? 'Unassigned driver'))),
     };
   }
@@ -72,4 +78,10 @@ export class AnalyticsService {
 function dateRange(filters: AnalyticsFilters) { return filters.from || filters.to ? { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } : undefined; }
 function counts(values: Array<string | null | undefined>) { const map = new Map<string, number>(); values.filter((value): value is string => Boolean(value)).forEach((value) => map.set(value, (map.get(value) ?? 0) + 1)); return [...map].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value); }
 function top(rows: { label: string; value: number }[]) { return rows.slice(0, 8); }
+function normaliseTripPurpose(value?: string | null) {
+  const purpose = value?.trim().toLowerCase();
+  if (purpose === 'official') return 'Official';
+  if (purpose === 'non-official' || purpose === 'non official') return 'Non-Official';
+  return null;
+}
 function groupByDate(rows: { date: Date; value: number }[]) { const map = new Map<string, number>(); rows.forEach((row) => { const key = row.date.toISOString().slice(0, 10); map.set(key, (map.get(key) ?? 0) + row.value); }); return [...map].map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date)); }

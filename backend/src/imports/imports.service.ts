@@ -51,6 +51,46 @@ export class ImportsService {
     return out;
   }
 
+  async departments(file: Express.Multer.File) {
+    const out = this.result();
+    for (const [index, row] of this.rows(file).entries()) {
+      try {
+        required(row, ['directorateCode', 'code', 'name']);
+        const directorateInput = row.directorateCode.trim();
+        const directorate =
+          await this.prisma.directorate.findUnique({ where: { code: directorateInput.toUpperCase() } })
+          ?? await this.prisma.directorate.findFirst({ where: { name: { equals: directorateInput } } });
+        if (!directorate) throw new Error(`Unknown directorate: ${directorateInput}`);
+        const code = row.code.trim().toUpperCase();
+        const exists = await this.prisma.department.findUnique({ where: { code } });
+        await this.prisma.department.upsert({
+          where: { code },
+          create: {
+            directorateId: directorate.id,
+            code,
+            name: row.name.trim(),
+            description: row.description || null,
+            status: 'ACTIVE',
+            sortOrder: Number(row.sortOrder || 0),
+          },
+          update: {
+            directorateId: directorate.id,
+            name: row.name.trim(),
+            description: row.description || null,
+            status: 'ACTIVE',
+            sortOrder: Number(row.sortOrder || 0),
+          },
+        });
+        if (exists) out.updated++;
+        else out.created++;
+      } catch (error) {
+        out.failed++;
+        out.errors.push({ row: index + 2, message: error instanceof Error ? error.message : 'Import failed' });
+      }
+    }
+    return out;
+  }
+
   async vehicles(file: Express.Multer.File) {
     const out = this.result(),
       statuses = ['AVAILABLE', 'IN_USE', 'RESERVED', 'MAINTENANCE', 'OUT_OF_SERVICE'];

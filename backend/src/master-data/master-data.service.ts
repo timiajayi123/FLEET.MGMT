@@ -20,10 +20,12 @@ export class MasterDataService {
   }
 
   async findAll(resource: MasterDataResource, query: MasterDataQueryDto) {
+    if (resource === 'departments' || resource === 'directorates')
+      await this.purgeArchivedHierarchy(resource);
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
-    const sortBy = query.sortBy ?? 'name';
+    const sortBy = query.sortBy ?? (resource === 'departments' ? 'sortOrder' : 'name');
     const sortOrder = query.sortOrder ?? 'asc';
     const where = {
       ...(query.activeOnly
@@ -41,7 +43,11 @@ export class MasterDataService {
           }
         : {}),
     };
-    const orderBy = [{ [sortBy]: sortOrder }, { id: 'asc' as const }];
+    const orderBy = [
+      { [sortBy]: sortOrder },
+      ...(sortBy === 'sortOrder' ? [{ name: 'asc' as const }] : []),
+      { id: 'asc' as const },
+    ];
     let data: unknown[];
     let total: number;
 
@@ -72,25 +78,6 @@ export class MasterDataService {
             take: limit,
             orderBy,
             include: { directorate: { select: { id: true, name: true, code: true } } },
-          }),
-        ]);
-        break;
-      }
-      case 'units': {
-        const unitWhere = {
-          ...where,
-          ...((query.departmentId ?? query.parentId)
-            ? { departmentId: query.departmentId ?? query.parentId }
-            : {}),
-        };
-        [total, data] = await this.prisma.$transaction([
-          this.prisma.unit.count({ where: unitWhere }),
-          this.prisma.unit.findMany({
-            where: unitWhere,
-            skip,
-            take: limit,
-            orderBy,
-            include: { department: { select: { id: true, name: true, code: true } } },
           }),
         ]);
         break;
@@ -146,6 +133,8 @@ export class MasterDataService {
   async create(resource: MasterDataResource, dto: SaveMasterDataDto) {
     this.validateResourceFields(resource, dto);
     const data = this.commonData(dto);
+    if (resource === 'departments' || resource === 'directorates')
+      data.status = MasterDataStatus.ACTIVE;
     try {
       return await this.createRecord(resource, dto, data);
     } catch (error) {
@@ -160,6 +149,8 @@ export class MasterDataService {
     await this.findOne(resource, id);
     this.validateResourceFields(resource, dto);
     const data = this.commonData(dto);
+    if (resource === 'departments' || resource === 'directorates')
+      data.status = MasterDataStatus.ACTIVE;
     try {
       switch (resource) {
         case 'directorates':
@@ -169,12 +160,6 @@ export class MasterDataService {
             where: { id },
             data: { ...data, directorateId: dto.directorateId! },
             include: { directorate: { select: { id: true, name: true, code: true } } },
-          });
-        case 'units':
-          return await this.prisma.unit.update({
-            where: { id },
-            data: { ...data, departmentId: dto.departmentId! },
-            include: { department: { select: { id: true, name: true, code: true } } },
           });
         case 'locations':
           return await this.prisma.location.update({
@@ -218,11 +203,6 @@ export class MasterDataService {
             where: { id },
             data: { status: MasterDataStatus.INACTIVE },
           });
-        case 'units':
-          return await this.prisma.unit.update({
-            where: { id },
-            data: { status: MasterDataStatus.INACTIVE },
-          });
         case 'locations':
           return await this.prisma.location.update({
             where: { id },
@@ -245,11 +225,16 @@ export class MasterDataService {
   }
 
   async remove(resource: MasterDataResource, id: string) {
-    if (resource !== 'locations') return this.archive(resource, id);
+    if (!['locations', 'departments', 'directorates'].includes(resource))
+      return this.archive(resource, id);
     await this.findOne(resource, id);
-    await this.assertLocationCanBeDeleted(id);
+    if (resource === 'locations') await this.assertLocationCanBeDeleted(id);
+    if (resource === 'departments') await this.assertDepartmentCanBeDeleted(id);
+    if (resource === 'directorates') await this.assertDirectorateCanBeDeleted(id);
     try {
-      return await this.prisma.location.delete({ where: { id } });
+      if (resource === 'locations') return await this.prisma.location.delete({ where: { id } });
+      if (resource === 'departments') return await this.prisma.department.delete({ where: { id } });
+      return await this.prisma.directorate.delete({ where: { id } });
     } catch (error) {
       this.handlePrismaError(error);
     }
@@ -278,11 +263,6 @@ export class MasterDataService {
         return this.prisma.department.findUnique({
           where: { id },
           include: { directorate: { select: { id: true, name: true, code: true } } },
-        });
-      case 'units':
-        return this.prisma.unit.findUnique({
-          where: { id },
-          include: { department: { select: { id: true, name: true, code: true } } },
         });
       case 'locations':
         return this.prisma.location.findUnique({ where: { id } });
@@ -316,11 +296,6 @@ export class MasterDataService {
           data: { ...data, directorateId: dto.directorateId! },
           include: { directorate: { select: { id: true, name: true, code: true } } },
         });
-      case 'units':
-        return this.prisma.unit.create({
-          data: { ...data, departmentId: dto.departmentId! },
-          include: { department: { select: { id: true, name: true, code: true } } },
-        });
       case 'locations':
         return this.prisma.location.create({
           data: { ...data, address: dto.address || null, state: dto.state || null },
@@ -339,8 +314,6 @@ export class MasterDataService {
   private validateResourceFields(resource: MasterDataResource, dto: SaveMasterDataDto) {
     if (resource === 'departments' && !dto.directorateId)
       throw new BadRequestException('directorateId is required for departments.');
-    if (resource === 'units' && !dto.departmentId)
-      throw new BadRequestException('departmentId is required for units.');
   }
 
   private async assertLocationCanBeDeleted(locationId: string) {
@@ -406,6 +379,57 @@ export class MasterDataService {
       throw new ConflictException(
         `This location cannot be deleted because it is attached to: ${blockers.join('; ')}.`,
       );
+    }
+  }
+
+  private async assertDepartmentCanBeDeleted(departmentId: string) {
+    const [users, requests, budgets] = await this.prisma.$transaction([
+      this.prisma.user.count({ where: { departmentId } }),
+      this.prisma.vehicleRequest.count({ where: { departmentId } }),
+      this.prisma.fuelBudget.count({ where: { departmentId } }),
+    ]);
+    const blockers = [
+      users && `${users} user(s)`,
+      requests && `${requests} vehicle request(s)`,
+      budgets && `${budgets} fuel budget(s)`,
+    ].filter(Boolean);
+    if (blockers.length)
+      throw new ConflictException(`This department cannot be deleted because it is used by ${blockers.join(', ')}.`);
+  }
+
+  private async assertDirectorateCanBeDeleted(directorateId: string) {
+    const [departments, users, requests, budgets] = await this.prisma.$transaction([
+      this.prisma.department.count({ where: { directorateId } }),
+      this.prisma.user.count({ where: { directorateId } }),
+      this.prisma.vehicleRequest.count({ where: { directorateId } }),
+      this.prisma.fuelBudget.count({ where: { directorateId } }),
+    ]);
+    const blockers = [
+      departments && `${departments} department(s)`,
+      users && `${users} user(s)`,
+      requests && `${requests} vehicle request(s)`,
+      budgets && `${budgets} fuel budget(s)`,
+    ].filter(Boolean);
+    if (blockers.length)
+      throw new ConflictException(`This directorate cannot be deleted because it is used by ${blockers.join(', ')}.`);
+  }
+
+  private async purgeArchivedHierarchy(resource: 'departments' | 'directorates') {
+    const archived = resource === 'departments'
+      ? await this.prisma.department.findMany({ where: { status: MasterDataStatus.INACTIVE }, select: { id: true } })
+      : await this.prisma.directorate.findMany({ where: { status: MasterDataStatus.INACTIVE }, select: { id: true } });
+    for (const record of archived) {
+      try {
+        if (resource === 'departments') {
+          await this.assertDepartmentCanBeDeleted(record.id);
+          await this.prisma.department.delete({ where: { id: record.id } });
+        } else {
+          await this.assertDirectorateCanBeDeleted(record.id);
+          await this.prisma.directorate.delete({ where: { id: record.id } });
+        }
+      } catch (error) {
+        if (!(error instanceof ConflictException)) throw error;
+      }
     }
   }
 

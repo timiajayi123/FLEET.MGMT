@@ -4,9 +4,9 @@ import { AppModule } from './app.module';
 
 function allowedCorsOrigins(): string[] {
   const configured = process.env.FRONTEND_URL?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? [];
-  if (configured.length) return configured;
-  if (process.env.NODE_ENV === 'production') return [];
-  return ['http://localhost:3000', 'http://localhost:3001'];
+  const developmentOrigins =
+    process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000', 'http://localhost:3001'];
+  return [...new Set([...configured, ...developmentOrigins])];
 }
 
 async function bootstrap() {
