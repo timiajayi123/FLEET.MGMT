@@ -15,7 +15,6 @@ type VehicleRequest = {
   location: string;
   directorate: string;
   department: string;
-  unit: string;
   purposeOfTrip: string;
   vehicleTypeName: string;
   destination: string;
@@ -82,7 +81,6 @@ export default function ReviewRequestsPage() {
         request.location,
         request.directorate,
         request.department,
-        request.unit,
         request.destination,
         request.purposeOfTrip,
         request.vehicleTypeName,
@@ -101,6 +99,7 @@ export default function ReviewRequestsPage() {
       return;
     }
     setError('');
+    setSelectedRequest(null);
     await load();
   }
 
@@ -184,21 +183,9 @@ export default function ReviewRequestsPage() {
                   <td>{request.priority}</td>
                   <td>{request.status.replaceAll('_', ' ')}</td>
                   <td>
-                    <div className="row-actions review-request-actions">
-                      <button aria-label={`View ${request.requestNumber}`} onClick={() => setSelectedRequest(request)}>
-                        <Eye size={15} />
-                      </button>
-                      {['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status) && (
-                        <>
-                          <button className="secondary-action" onClick={() => void rejectRequest(request.id)}>
-                            <XCircle size={15} /> Reject
-                          </button>
-                          <button className="primary-action" onClick={() => { setModalError(''); setApprovalRequest(request); }}>
-                            Approve & allocate
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    <button className="review-view-button" aria-label={`View ${request.requestNumber}`} onClick={() => setSelectedRequest(request)}>
+                      <Eye size={21} /> View request
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -212,7 +199,7 @@ export default function ReviewRequestsPage() {
           </div>
         )}
       </section>
-      {selectedRequest && <RequestDetailsModal request={selectedRequest} onClose={() => setSelectedRequest(null)} />}
+      {selectedRequest && <RequestDetailsModal request={selectedRequest} onClose={() => setSelectedRequest(null)} onReject={() => void rejectRequest(selectedRequest.id)} onApprove={() => { setModalError(''); setApprovalRequest(selectedRequest); setSelectedRequest(null); }} />}
       {approvalRequest && (
         <ApprovalAllocationModal
           request={approvalRequest}
@@ -229,7 +216,8 @@ export default function ReviewRequestsPage() {
   );
 }
 
-function RequestDetailsModal({ request, onClose }: { request: VehicleRequest; onClose: () => void }) {
+function RequestDetailsModal({ request, onClose, onReject, onApprove }: { request: VehicleRequest; onClose: () => void; onReject: () => void; onApprove: () => void }) {
+  const actionable = ['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status);
   return (
     <div className="master-modal-backdrop">
       <section className="master-modal">
@@ -242,20 +230,22 @@ function RequestDetailsModal({ request, onClose }: { request: VehicleRequest; on
         </header>
         <div className="approval-request-summary">
           <strong>{request.staffName} ({request.employeeId})</strong>
-          <small>{request.location} · {request.directorate} · {request.department} · {request.unit}</small>
+          <small>{request.location} · {request.directorate} · {request.department}</small>
           <small>{request.status.replaceAll('_', ' ')} · {request.priority}</small>
         </div>
         <div className="master-form-grid">
           <ReadOnly label="Purpose" value={request.purposeOfTrip} />
           <ReadOnly label="Vehicle type" value={request.vehicleTypeName} />
           <ReadOnly label="Destination" value={request.destination} />
-          <ReadOnly label="Passengers" value={String(request.numberOfPassengers)} />
+          <ReadOnly label="Passengers" value={request.numberOfPassengers ? String(request.numberOfPassengers) : 'Not specified'} />
           <ReadOnly label="Departure" value={new Date(request.departureDate).toLocaleString()} />
           <ReadOnly label="Expected return" value={new Date(request.expectedReturnDate).toLocaleString()} />
           <ReadOnly label="Purpose details" value={request.remarks || 'No purpose details provided'} />
         </div>
         <footer>
           <button type="button" className="secondary-action" onClick={onClose}>Close</button>
+          {actionable && <button type="button" className="secondary-action" onClick={onReject}><XCircle size={16}/> Reject</button>}
+          {actionable && <button type="button" className="primary-action" onClick={onApprove}>Approve &amp; allocate</button>}
         </footer>
       </section>
     </div>

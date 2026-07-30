@@ -2,8 +2,9 @@
 
 import { PageHeader } from '@/components/page-header';
 import { AnalyticsDashboard } from '@/components/analytics-dashboard';
+import { DriverTripDashboard } from '@/components/driver-trip-dashboard';
 import { apiMessage, readApiJson } from '@/lib/api-response';
-import { ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, MapPin, Navigation, Route, X, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, Navigation, Route, X, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -219,6 +220,8 @@ function DriverDashboard({ data }: { data: DashboardData }) {
     { label: 'Active trips', value: data.metrics.activeTrips ?? 0, note: 'Currently in progress', icon: Navigation, tone: 'amber' },
     { label: 'Distance', value: `${(data.metrics.totalDistance ?? 0).toFixed(1)} km`, note: 'Recent recorded distance', icon: Route, tone: 'purple' },
   ];
+  return <><MetricGrid metrics={metrics} /><DriverTripDashboard /></>;
+  /*
   return (
     <>
       <MetricGrid metrics={metrics} />
@@ -234,6 +237,7 @@ function DriverDashboard({ data }: { data: DashboardData }) {
       </section>
     </>
   );
+  */
 }
 
 function MetricGrid({ metrics }: { metrics: { label: string; value: number | string; note: string; icon: LucideIcon; tone: string }[] }) {

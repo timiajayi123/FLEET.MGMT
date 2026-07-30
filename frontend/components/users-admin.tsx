@@ -15,10 +15,9 @@ type User = {
   location?: Option;
   directorate?: Option;
   department?: Option;
-  unit?: Option;
 };
 
-const resources = ['roles', 'locations', 'directorates', 'departments', 'units'] as const;
+const resources = ['roles', 'locations', 'directorates', 'departments'] as const;
 
 export function UsersAdmin() {
   const [users, setUsers] = useState<User[]>([]);
@@ -121,7 +120,7 @@ export function UsersAdmin() {
                   <td>{user.employeeId}</td>
                   <td>{user.role.name}</td>
                   <td>
-                    {[user.location?.name, user.directorate?.name, user.department?.name, user.unit?.name]
+                    {[user.location?.name, user.directorate?.name, user.department?.name]
                       .filter(Boolean)
                       .join(' / ') || '—'}
                   </td>
@@ -178,7 +177,6 @@ export function UsersAdmin() {
                   options={options.departments}
                   required={false}
                 />
-                <Select name="unitId" label="Unit" options={options.units} required={false} />
               </div>
               {error && <div className="master-alert modal-alert">{error}</div>}
               <footer>

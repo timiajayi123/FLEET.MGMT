@@ -12,14 +12,6 @@ export const masterDataResources = {
     parentField: 'directorateId',
     parentLabel: 'Directorate',
   },
-  units: {
-    title: 'Units',
-    singular: 'Unit',
-    description: 'Manage operational units and their parent departments.',
-    parentResource: 'departments',
-    parentField: 'departmentId',
-    parentLabel: 'Department',
-  },
   locations: {
     title: 'Locations',
     singular: 'Location',

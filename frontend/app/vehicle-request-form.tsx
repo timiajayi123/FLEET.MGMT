@@ -15,15 +15,12 @@ const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/$
 export function VehicleRequestForm({ embedded = false }: { embedded?: boolean }) {
   const [state, setState] = useState<SubmissionState>({ type: 'idle' });
   const [directorateId, setDirectorateId] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
   const [locationValue, setLocationValue] = useState('');
   const [departmentValue, setDepartmentValue] = useState('');
-  const [unitValue, setUnitValue] = useState('');
   const [destinationValue, setDestinationValue] = useState('');
-  const [profile, setProfile] = useState<{ staffName: string; employeeId: string; directorateId?: string; departmentId?: string; unitId?: string } | null>(null);
+  const [profile, setProfile] = useState<{ staffName: string; employeeId: string; directorateId?: string } | null>(null);
   const directorates = useMasterOptions('directorates');
   const departments = useMasterOptions('departments', directorateId, Boolean(directorateId));
-  const units = useMasterOptions('units', departmentId, Boolean(departmentId));
   const locations = useMasterOptions('locations');
   const vehicleTypes = useMasterOptions('vehicle-types');
 
@@ -32,7 +29,6 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       if (!payload?.user) return;
       setProfile(payload.user);
       setDirectorateId(payload.user.directorateId ?? '');
-      setDepartmentId(payload.user.departmentId ?? '');
     }).catch(() => undefined);
   }, []);
 
@@ -43,6 +39,10 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
     if (!form.reportValidity()) return;
 
     const formData = new FormData(form);
+    if (sameDestination(locationValue, destinationValue)) {
+      setState({ type: 'error', message: 'Destination From and Destination To must be different.' });
+      return;
+    }
     const destinationMatch = locations.options.find((option) => option.name.toLocaleLowerCase() === destinationValue.trim().toLocaleLowerCase());
     formData.set('customDestination', destinationMatch ? '' : destinationValue.trim());
     const departureDate = String(formData.get('departureDate'));
@@ -85,10 +85,8 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
 
       form.reset();
       setDirectorateId('');
-      setDepartmentId('');
       setLocationValue('');
       setDepartmentValue('');
-      setUnitValue('');
       setDestinationValue('');
       setState({ type: 'success', requestNumber: payload.requestNumber });
     } catch (error) {
@@ -116,15 +114,6 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
         <div className="field-grid">
           <Field label="Staff Name" name="staffName" minLength={2} maxLength={150} value={profile?.staffName} readOnly={Boolean(profile)} />
           <Field label="Employee ID" name="employeeId" maxLength={50} value={profile?.employeeId} readOnly={Boolean(profile)} />
-          <CreatableMasterField
-            label="Location"
-            options={locations.options}
-            loading={locations.loading}
-            value={locationValue}
-            onChange={(value) => setLocationValue(value)}
-            idName="locationId"
-            customName="customPickupLocation"
-          />
           <MasterSelect
             label="Directorate"
             name="directorateId"
@@ -133,7 +122,7 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             value={directorateId}
             onChange={(value) => {
               setDirectorateId(value);
-              setDepartmentId('');
+              setDepartmentValue('');
             }}
           />
           <CreatableMasterField
@@ -143,21 +132,8 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             value={departmentValue}
             idName="departmentId"
             customName="customDepartment"
-            onChange={(value, id) => {
-              setDepartmentValue(value);
-              setDepartmentId(id);
-              setUnitValue('');
-            }}
-          />
-          <CreatableMasterField
-            label="Unit"
-            options={units.options}
-            loading={units.loading}
-            value={unitValue}
-            idName="unitId"
-            customName="customUnit"
             onChange={(value) => {
-              setUnitValue(value);
+              setDepartmentValue(value);
             }}
           />
         </div>
@@ -183,10 +159,10 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
           </label>
           <label className="field field-wide">
             <span>Purpose details</span>
-            <textarea name="remarks" required minLength={5} maxLength={2000} rows={3} placeholder="State the reason for this official or non-official trip." />
-            <small>This reason is included in the request details for fleet review.</small>
+            <textarea name="remarks" maxLength={2000} rows={3} placeholder="Optionally add more information about the trip." />
+            <small>Optional. Add any details that may help fleet review the request.</small>
           </label>
-          <label className="field">
+          <label className="field field-wide">
             <span>Vehicle Type</span>
             <MasterSelectControl
               name="vehicleTypeId"
@@ -195,13 +171,22 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
               loading={vehicleTypes.loading}
             />
           </label>
+          <CreatableMasterField
+            label="Destination From"
+            options={locations.options}
+            loading={locations.loading}
+            value={locationValue}
+            onChange={(value) => setLocationValue(value)}
+            idName="locationId"
+            customName="customPickupLocation"
+          />
           <label className="field">
-            <span>Destination</span>
+            <span>Destination To</span>
             <input name="destination" list="vehicle-request-destinations" value={destinationValue} onChange={(event) => setDestinationValue(event.target.value)} required minLength={2} maxLength={300} placeholder="Select a registered location or type a destination" disabled={locations.loading} />
             <datalist id="vehicle-request-destinations">
               {locations.options.map((option) => <option key={option.id} value={option.name}>{option.code}</option>)}
             </datalist>
-            <small>You may select a registered location or enter a new destination.</small>
+            <small>Select where the trip will end. It must differ from Destination From.</small>
           </label>
           <Field label="Departure Date" name="departureDate" type="datetime-local" />
           <Field label="Expected Return Date" name="expectedReturnDate" type="datetime-local" />
@@ -211,6 +196,7 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             type="number"
             min={1}
             max={100}
+            required={false}
           />
           <label className="field">
             <span>Priority</span>
@@ -278,18 +264,24 @@ type FieldProps = {
   maxLength?: number;
   value?: string;
   readOnly?: boolean;
+  required?: boolean;
 };
 
-function Field({ label, name, type = 'text', ...constraints }: FieldProps) {
+function Field({ label, name, type = 'text', required = true, ...constraints }: FieldProps) {
   return (
     <label className="field">
       <span>{label}</span>
-      <input name={name} type={type} required {...constraints} />
+      <input name={name} type={type} required={required} {...constraints} />
     </label>
   );
 }
 
 type MasterOption = { id: string; name: string; code: string };
+
+function sameDestination(from: string, to: string) {
+  const normalise = (value: string) => value.trim().toLocaleLowerCase();
+  return Boolean(normalise(from) && normalise(to) && normalise(from) === normalise(to));
+}
 
 function useMasterOptions(resource: string, parentId?: string, enabled = true) {
   const [options, setOptions] = useState<MasterOption[]>([]);

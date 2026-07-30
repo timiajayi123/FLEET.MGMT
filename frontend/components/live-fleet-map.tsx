@@ -22,7 +22,7 @@ type Position = {
   driver: { staffName: string; employeeId: string; phone: string };
   vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; vehicleType?: { id: string; name: string; mapIcon?: string | null; mapIconMimeType?: string | null } };
   trip: { id: string; status: string };
-  allocation: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string; unit: string } };
+  allocation: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string } };
 };
 type Allocation = { id: string; status: string; destination?: string; vehicle: { registrationNumber: string }; driver: { staffName: string }; trip?: { id: string; status: string } };
 type VehicleIconKind = 'BUS' | 'TRUCK' | 'PICKUP' | 'VAN' | 'SUV' | 'MOTORCYCLE' | 'CAR';

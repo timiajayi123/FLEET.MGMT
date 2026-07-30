@@ -64,11 +64,12 @@ export function MasterDataAdmin({
 }) {
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [parents, setParents] = useState<RecordItem[]>([]);
-  const defaultSortBy = resource === 'locations' ? 'createdAt' : 'name';
+  const defaultSortBy =
+    resource === 'locations' ? 'createdAt' : resource === 'departments' ? 'sortOrder' : 'name';
   const defaultSortOrder = resource === 'locations' ? 'desc' : 'asc';
   const [meta, setMeta] = useState<Meta>({
     page: 1,
-    limit: resource === 'locations' ? 50 : 10,
+    limit: resource === 'departments' ? 100 : resource === 'locations' ? 50 : 10,
     total: 0,
     totalPages: 0,
     sortBy: defaultSortBy,
@@ -81,9 +82,10 @@ export function MasterDataAdmin({
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [directorateFilter, setDirectorateFilter] = useState('');
   const [selected, setSelected] = useState<RecordItem | null>(null);
   const [modal, setModal] = useState<Modal>(null);
-  const hardDelete = resource === 'locations';
+  const hardDelete = ['locations', 'departments', 'directorates'].includes(resource);
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -97,6 +99,8 @@ export function MasterDataAdmin({
       });
       if (search) query.set('search', search);
       if (status) query.set('status', status);
+      if (resource === 'departments' && directorateFilter)
+        query.set('directorateId', directorateFilter);
       const response = await fetch(apiPath(`/${resource}?${query}`), { cache: 'no-store', credentials: 'include' });
       const payload = (await response.json()) as {
         data?: RecordItem[];
@@ -112,7 +116,16 @@ export function MasterDataAdmin({
     } finally {
       setLoading(false);
     }
-  }, [meta.limit, meta.page, meta.sortBy, meta.sortOrder, resource, search, status]);
+  }, [
+    directorateFilter,
+    meta.limit,
+    meta.page,
+    meta.sortBy,
+    meta.sortOrder,
+    resource,
+    search,
+    status,
+  ]);
 
   useEffect(() => {
     void Promise.resolve().then(loadRecords);
@@ -238,9 +251,9 @@ export function MasterDataAdmin({
         description={config.description}
         actions={
           <div className="master-actions">
-            <button className="secondary-action" disabled title="CSV/Excel import is planned">
+            {resource !== 'departments' && <button className="secondary-action" disabled title="CSV/Excel import is planned">
               <FileSpreadsheet size={16} /> Import
-            </button>
+            </button>}
             <button className="primary-action" onClick={() => openModal('create')}>
               <Plus size={16} /> Add {config.singular}
             </button>
@@ -257,40 +270,63 @@ export function MasterDataAdmin({
       )}
       <section className="master-panel">
         <div className="master-toolbar">
-          <form onSubmit={submitSearch}>
-            <label>
-              <Search size={16} />
-              <input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder={`Search ${config.title.toLowerCase()}…`}
-              />
-            </label>
-          </form>
+          {resource !== 'departments' && (
+            <form onSubmit={submitSearch}>
+              <label>
+                <Search size={16} />
+                <input
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  placeholder={`Search ${config.title.toLowerCase()}…`}
+                />
+              </label>
+            </form>
+          )}
           <div className="master-filters">
-            <select
-              aria-label="Filter by status"
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setMeta((current) => ({ ...current, page: 1 }));
-              }}
-            >
-              <option value="">All statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-            <select
-              aria-label="Rows per page"
-              value={meta.limit}
-              onChange={(event) =>
-                setMeta((current) => ({ ...current, page: 1, limit: Number(event.target.value) }))
-              }
-            >
-              <option value="10">10 per page</option>
-              <option value="20">20 per page</option>
-              <option value="50">50 per page</option>
-            </select>
+            {resource === 'departments' && (
+              <select
+                aria-label="Filter by directorate"
+                value={directorateFilter}
+                onChange={(event) => {
+                  setDirectorateFilter(event.target.value);
+                  setMeta((current) => ({ ...current, page: 1 }));
+                }}
+              >
+                <option value="">All directorates</option>
+                {parents.map((directorate) => (
+                  <option value={directorate.id} key={directorate.id}>
+                    {directorate.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {resource !== 'departments' && (
+              <select
+                aria-label="Filter by status"
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setMeta((current) => ({ ...current, page: 1 }));
+                }}
+              >
+                <option value="">All statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            )}
+            {resource !== 'departments' && (
+              <select
+                aria-label="Rows per page"
+                value={meta.limit}
+                onChange={(event) =>
+                  setMeta((current) => ({ ...current, page: 1, limit: Number(event.target.value) }))
+                }
+              >
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+              </select>
+            )}
           </div>
         </div>
         {error && !modal && (
@@ -306,7 +342,7 @@ export function MasterDataAdmin({
           </div>
         ) : records.length === 0 ? (
           <EmptyState
-            hasFilters={Boolean(search || status)}
+            hasFilters={Boolean(search || status || directorateFilter)}
             singular={config.singular}
             title={config.title}
             onCreate={() => openModal('create')}
@@ -380,28 +416,34 @@ export function MasterDataAdmin({
             </table>
           </div>
         )}
-        <footer className="master-pagination">
-          <span>
-            Showing {from}–{to} of {meta.total}
-          </span>
-          <div>
-            <button
-              disabled={meta.page <= 1 || loading}
-              onClick={() => setMeta((current) => ({ ...current, page: current.page - 1 }))}
-            >
-              <ChevronLeft size={15} /> Previous
-            </button>
+        {resource === 'departments' ? (
+          <footer className="master-pagination">
+            <span>Showing all {meta.total} departments</span>
+          </footer>
+        ) : (
+          <footer className="master-pagination">
             <span>
-              Page {meta.page} of {Math.max(meta.totalPages, 1)}
+              Showing {from}–{to} of {meta.total}
             </span>
-            <button
-              disabled={meta.page >= meta.totalPages || loading}
-              onClick={() => setMeta((current) => ({ ...current, page: current.page + 1 }))}
-            >
-              Next <ChevronRight size={15} />
-            </button>
-          </div>
-        </footer>
+            <div>
+              <button
+                disabled={meta.page <= 1 || loading}
+                onClick={() => setMeta((current) => ({ ...current, page: current.page - 1 }))}
+              >
+                <ChevronLeft size={15} /> Previous
+              </button>
+              <span>
+                Page {meta.page} of {Math.max(meta.totalPages, 1)}
+              </span>
+              <button
+                disabled={meta.page >= meta.totalPages || loading}
+                onClick={() => setMeta((current) => ({ ...current, page: current.page + 1 }))}
+              >
+                Next <ChevronRight size={15} />
+              </button>
+            </div>
+          </footer>
+        )}
       </section>
       {(modal === 'create' || modal === 'edit') && (
         <RecordFormModal
@@ -564,7 +606,7 @@ function RecordFormModal({
             <span>Status</span>
             <select name="status" defaultValue={record?.status ?? 'ACTIVE'}>
               <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
+              {!['Department', 'Directorate'].includes(config.singular) && <option value="INACTIVE">Inactive</option>}
             </select>
           </label>
           <FormField
@@ -665,7 +707,7 @@ function ConfirmArchive({
         {hardDelete ? (
           <p>
             This {config.singular.toLowerCase()} will be permanently deleted. It can only be
-            deleted if no users, vehicles, drivers, or requests are using it.
+            deleted if no other records are using it.
           </p>
         ) : (
           <p>

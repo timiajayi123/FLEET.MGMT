@@ -1,7 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
-import { Pencil, Search, Trash2 } from 'lucide-react';
+import { Download, Pencil, Search, Trash2 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type Vehicle = {
@@ -27,8 +27,11 @@ type Vehicle = {
   faultDescription?: string | null;
   color?: string | null;
   status: string;
+  locationId?: string | null;
+  vehicleTypeId?: string | null;
   imageMimeType?: string;
 };
+type Option = { id: string; name: string };
 
 type Mode = { type: 'create'; vehicle?: undefined } | { type: 'edit'; vehicle: Vehicle };
 
@@ -37,7 +40,12 @@ export default function VehiclesPage() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState('');
+  const [ageFilter, setAgeFilter] = useState('');
+  const [serviceFilter, setServiceFilter] = useState('');
+  const [locations, setLocations] = useState<Option[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<Option[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const load = () =>
@@ -47,13 +55,23 @@ export default function VehiclesPage() {
 
   useEffect(() => {
     void load();
+    void Promise.all([
+      fetch('/api/locations?activeOnly=true&limit=100').then((response) => response.json()),
+      fetch('/api/vehicle-types?activeOnly=true&limit=100').then((response) => response.json()),
+    ]).then(([locationPayload, typePayload]) => {
+      setLocations(locationPayload.data ?? []);
+      setVehicleTypes(typePayload.data ?? []);
+    });
   }, []);
 
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase();
     return items
       .filter((vehicle) => {
-        if (statusFilter && vehicle.status !== statusFilter) return false;
+        if (locationFilter && vehicle.locationId !== locationFilter && vehicle.locationUser !== locationFilter) return false;
+        if (vehicleTypeFilter && vehicle.vehicleTypeId !== vehicleTypeFilter) return false;
+        if (ageFilter && vehicle.age !== ageFilter) return false;
+        if (serviceFilter && vehicle.serviceability !== serviceFilter) return false;
         if (!search) return true;
         return [
         vehicle.serialNumber,
@@ -81,7 +99,19 @@ export default function VehiclesPage() {
           .some((value) => String(value).toLowerCase().includes(search));
       })
       .sort(compareVehiclesBySerialNumber);
-  }, [items, query, statusFilter]);
+  }, [ageFilter, items, locationFilter, query, serviceFilter, vehicleTypeFilter]);
+
+  function exportVehicles() {
+    downloadCsv('vehicles.csv', filteredItems.map((vehicle) => ({
+      'Plate number': vehicle.officialRegistrationNumber || vehicle.privateRegistrationNumber || vehicle.registrationNumber,
+      Location: locations.find((option) => option.id === vehicle.locationId)?.name || vehicle.locationUser || '',
+      'Vehicle type': vehicleTypes.find((option) => option.id === vehicle.vehicleTypeId)?.name || `${vehicle.manufacturer} ${vehicle.model}`.trim(),
+      Age: vehicle.age || '',
+      'Year of purchase': vehicle.year || '',
+      'Current service': vehicle.serviceability || '',
+      Status: vehicle.status.replaceAll('_', ' '),
+    })));
+  }
 
   const visibleIds = filteredItems.map((vehicle) => vehicle.id);
   const allVisibleSelected =
@@ -239,11 +269,7 @@ export default function VehiclesPage() {
       <PageHeader
         title="Vehicles"
         description="Manage vehicles and full register details in the fleet register."
-        actions={
-          <button className="primary-action" onClick={() => setMode({ type: 'create' })}>
-            Add vehicle
-          </button>
-        }
+        actions={<><button className="secondary-action" onClick={exportVehicles}><Download size={16}/> Export CSV</button><button className="primary-action" onClick={() => setMode({ type: 'create' })}>Add vehicle</button></>}
       />
       {error && <div className="master-alert">{error}</div>}
       <section className="master-panel">
@@ -264,18 +290,10 @@ export default function VehiclesPage() {
             >
               <Trash2 size={15} /> Delete selected ({selectedIds.length})
             </button>
-            <select
-              aria-label="Filter vehicles by status"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-            >
-              <option value="">All statuses</option>
-              <option value="AVAILABLE">Available</option>
-              <option value="IN_USE">In use</option>
-              <option value="RESERVED">Reserved</option>
-              <option value="MAINTENANCE">Maintenance</option>
-              <option value="OUT_OF_SERVICE">Out of service</option>
-            </select>
+            <select aria-label="Filter vehicles by location" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+            <select aria-label="Filter vehicles by vehicle type" value={vehicleTypeFilter} onChange={(event) => setVehicleTypeFilter(event.target.value)}><option value="">All vehicle types</option>{vehicleTypes.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+            <select aria-label="Filter vehicles by age" value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}><option value="">All ages</option>{unique(items.map((item) => item.age)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
+            <select aria-label="Filter vehicles by current service" value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)}><option value="">All service conditions</option>{unique(items.map((item) => item.serviceability)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
           </div>
         </div>
         <div className="master-table-wrap">
@@ -295,19 +313,10 @@ export default function VehiclesPage() {
                 <th>Vehicle Type/Make</th>
                 <th>Private Reg. Number</th>
                 <th>Official Reg. Number</th>
-                <th>Purchase Cost</th>
-                <th>Booked Value (N)</th>
-                <th>Estimated Cost (N)</th>
-                <th>Reserved Present Value</th>
                 <th>Age</th>
                 <th>Year of Purchase</th>
-                <th>Serviceable/Unserviceable</th>
-                <th>Legacy Agency</th>
-                <th>Chassis Number</th>
-                <th>Engine Number</th>
+                <th>Current Service</th>
                 <th>Status</th>
-                <th>Remark</th>
-                <th>Description of Fault</th>
                 <th>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -335,19 +344,10 @@ export default function VehiclesPage() {
                   <td>{`${vehicle.manufacturer} ${vehicle.model}`.trim()}</td>
                   <td>{vehicle.privateRegistrationNumber || '—'}</td>
                   <td>{vehicle.officialRegistrationNumber || '—'}</td>
-                  <td>{vehicle.purchaseCost || '—'}</td>
-                  <td>{vehicle.bookedValue || '—'}</td>
-                  <td>{vehicle.estimatedCost || '—'}</td>
-                  <td>{vehicle.reservedPresentValue || '—'}</td>
                   <td>{vehicle.age || '—'}</td>
                   <td>{vehicle.year || '—'}</td>
                   <td>{vehicle.serviceability || '—'}</td>
-                  <td>{vehicle.legacyAgency || '—'}</td>
-                  <td>{vehicle.chassisNumber || '—'}</td>
-                  <td>{vehicle.engineNumber || '—'}</td>
                   <td>{vehicle.status.replaceAll('_', ' ')}</td>
-                  <td>{vehicle.remark || '—'}</td>
-                  <td>{vehicle.faultDescription || '—'}</td>
                   <td>
                     <div className="row-actions">
                       <button
@@ -506,4 +506,20 @@ function normaliseSerial(value?: string | null) {
     text: text || '999999999',
     numeric: Number.isFinite(numeric) && text ? numeric : null,
   };
+}
+
+function unique(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+}
+
+function downloadCsv(fileName: string, rows: Record<string, string | number>[]) {
+  if (!rows.length) return;
+  const columns = Object.keys(rows[0]);
+  const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+  const csv = [columns.map(escape).join(','), ...rows.map((row) => columns.map((column) => escape(row[column] ?? '')).join(','))].join('\r\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }

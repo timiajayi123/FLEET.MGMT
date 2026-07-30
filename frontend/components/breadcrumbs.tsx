@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronRight, Home } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 const labels: Record<string, string> = {
   ai: 'AI',
@@ -17,7 +17,33 @@ function labelFor(segment: string) {
 }
 
 export function Breadcrumbs() {
-  const segments = usePathname().split('/').filter(Boolean);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const segments = pathname.split('/').filter(Boolean);
+
+  if (pathname === '/analytics/reports') {
+    const report = searchParams.get('report');
+    const reportLabels: Record<string, string> = {
+      requests: 'Vehicle Request Report',
+      trips: 'Trip Report',
+      drivers: 'Driver Activity Report',
+      speed: 'Speed Violation Report',
+      utilisation: 'Vehicle Utilisation Report',
+      maintenance: 'Maintenance Report',
+    };
+    return (
+      <nav className="breadcrumbs" aria-label="Breadcrumb">
+        {report && reportLabels[report] ? (
+          <>
+            <Link href="/analytics/reports">Reports</Link>
+            <span><ChevronRight size={13} /><span aria-current="page">{reportLabels[report]}</span></span>
+          </>
+        ) : (
+          <span aria-current="page">Reports</span>
+        )}
+      </nav>
+    );
+  }
 
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">

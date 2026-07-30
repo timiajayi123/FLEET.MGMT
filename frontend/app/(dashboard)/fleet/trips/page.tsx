@@ -29,6 +29,8 @@ type Trip = {
     requestNumber: string;
     staffName: string;
     employeeId: string;
+    department: string;
+    directorate: string;
     purposeOfTrip: string;
     destination: string;
     status: string;
@@ -44,6 +46,11 @@ export default function TripsPage() {
   const [items, setItems] = useState<Trip[]>([]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [dateFilter, setDateFilter] = useState('');
+  const [destinationFilter, setDestinationFilter] = useState('');
+  const [driverFilter, setDriverFilter] = useState('');
+  const [staffFilter, setStaffFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [error, setError] = useState('');
   const [replayTrip, setReplayTrip] = useState<Trip | null>(null);
 
@@ -74,9 +81,16 @@ export default function TripsPage() {
         trip.allocation.destination,
         trip.allocation.purpose,
       ].filter(Boolean).join(' ').toLowerCase();
-      return (!needle || text.includes(needle)) && (status === 'ALL' || trip.status === status || trip.allocation.status === status);
+      const tripDate = (trip.startedAt || trip.allocation.startAt).slice(0, 10);
+      return (!needle || text.includes(needle))
+        && (status === 'ALL' || trip.status === status || trip.allocation.status === status)
+        && (!dateFilter || tripDate === dateFilter)
+        && (!destinationFilter || (trip.allocation.destination || trip.request?.destination) === destinationFilter)
+        && (!driverFilter || trip.driver.id === driverFilter)
+        && (!staffFilter || trip.request?.employeeId === staffFilter)
+        && (!departmentFilter || trip.request?.department === departmentFilter);
     });
-  }, [items, query, status]);
+  }, [dateFilter, departmentFilter, destinationFilter, driverFilter, items, query, staffFilter, status]);
 
   const completed = items.filter((trip) => trip.status === 'COMPLETED').length;
   const inProgress = items.filter((trip) => trip.status === 'IN_PROGRESS').length;
@@ -98,7 +112,13 @@ export default function TripsPage() {
       </section>
       <section className="fleet-toolbar">
         <label><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search request, staff, driver, vehicle or destination" /></label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+        <div className="trip-history-filters">
+        <input aria-label="Filter trips by date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}/>
+        <select aria-label="Filter trips by destination" value={destinationFilter} onChange={(event) => setDestinationFilter(event.target.value)}><option value="">All destinations</option>{unique(items.map((trip) => trip.allocation.destination || trip.request?.destination)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
+        <select aria-label="Filter trips by driver" value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)}><option value="">All drivers</option>{uniqueRecords(items.map((trip) => ({ id: trip.driver.id, label: trip.driver.staffName }))).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+        <select aria-label="Filter trips by requesting staff" value={staffFilter} onChange={(event) => setStaffFilter(event.target.value)}><option value="">All staff</option>{uniqueRecords(items.flatMap((trip) => trip.request ? [{ id: trip.request.employeeId, label: trip.request.staffName }] : [])).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+        <select aria-label="Filter trips by department" value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)}><option value="">All departments</option>{unique(items.map((trip) => trip.request?.department)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
+        <select aria-label="Filter trips by status" value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="ALL">All statuses</option>
           <option value="ASSIGNED">Assigned</option>
           <option value="ACCEPTED">Accepted</option>
@@ -106,6 +126,8 @@ export default function TripsPage() {
           <option value="COMPLETED">Completed</option>
           <option value="CANCELLED">Cancelled</option>
         </select>
+        <button type="button" className="secondary-action" onClick={() => { setDateFilter(''); setDestinationFilter(''); setDriverFilter(''); setStaffFilter(''); setDepartmentFilter(''); setStatus('ALL'); setQuery(''); }}>Clear filters</button>
+        </div>
       </section>
       <section className="trip-history-list">
         {visible.map((trip) => (
@@ -172,4 +194,12 @@ function formatDate(value: string) {
 
 function toKmh(speedMetresPerSecond?: number) {
   return Math.round((speedMetresPerSecond ?? 0) * 3.6);
+}
+
+function unique(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+}
+
+function uniqueRecords(values: Array<{ id: string; label: string }>) {
+  return [...new Map(values.map((value) => [value.id, value])).values()].sort((a, b) => a.label.localeCompare(b.label));
 }

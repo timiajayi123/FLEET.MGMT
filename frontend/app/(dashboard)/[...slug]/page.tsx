@@ -5,6 +5,7 @@ import { MaintenanceWorkspace } from '@/components/maintenance-workspace';
 import { FuelWorkspace } from '@/components/fuel-workspace';
 import { moduleMetadata } from '@/components/navigation';
 import { notFound, redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
 export default async function ModulePage({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug } = await params;
@@ -14,7 +15,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (!moduleInfo || path === '/dashboard') notFound();
 
   if (path === '/analytics/dashboard') redirect('/dashboard');
-  if (path === '/analytics/reports') return <VehicleRequestReport />;
+  if (path === '/analytics/reports') return <Suspense fallback={<div className="panel"><p>Loading reports…</p></div>}><VehicleRequestReport /></Suspense>;
   if (path === '/operations/maintenance') return <MaintenanceWorkspace />;
   if (path === '/operations/fuel-management' || path === '/fuel/operations') return <FuelWorkspace view="operations" />;
   if (path === '/fuel/dashboard') return <FuelWorkspace view="dashboard" />;

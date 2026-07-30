@@ -1,7 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
-import { CarFront, Eye, Gauge, Pencil, Route, Trash2 } from 'lucide-react';
+import { CarFront, Download, Eye, Gauge, Pencil, Route, Search, Trash2 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type Driver = {
@@ -16,6 +16,8 @@ type Driver = {
   email?: string | null;
   status: string;
   passportMimeType?: string;
+  location?: { id: string; name: string } | null;
+  allocations?: Array<{ vehicle: { registrationNumber: string; age?: string | null; serviceability?: string | null; vehicleType?: { id: string; name: string } | null } }>;
 };
 
 type Mode = { type: 'create'; driver?: undefined } | { type: 'edit'; driver: Driver };
@@ -31,13 +33,45 @@ export default function DriversPage() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [details, setDetails] = useState<DriverDetails | null>(null);
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState('');
+  const [ageFilter, setAgeFilter] = useState('');
+  const [serviceFilter, setServiceFilter] = useState('');
   const load = () => fetch('/api/drivers').then((r) => r.json()).then((p) => setItems(p.data || []));
 
   useEffect(() => {
     void load();
   }, []);
 
-  const sortedItems = useMemo(() => [...items].sort(compareDriversBySerialNumber), [items]);
+  const sortedItems = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return items.filter((driver) => {
+      const vehicle = driver.allocations?.[0]?.vehicle;
+      if (locationFilter && driver.location?.id !== locationFilter && driver.locationText !== locationFilter) return false;
+      if (vehicleTypeFilter && vehicle?.vehicleType?.id !== vehicleTypeFilter) return false;
+      if (ageFilter && vehicle?.age !== ageFilter) return false;
+      if (serviceFilter && vehicle?.serviceability !== serviceFilter) return false;
+      return !search || [driver.staffName, driver.employeeId, driver.phone, driver.location?.name, driver.locationText, vehicle?.registrationNumber, vehicle?.vehicleType?.name].filter(Boolean).some((value) => String(value).toLowerCase().includes(search));
+    }).sort(compareDriversBySerialNumber);
+  }, [ageFilter, items, locationFilter, query, serviceFilter, vehicleTypeFilter]);
+
+  function exportDrivers() {
+    downloadCsv('drivers.csv', sortedItems.map((driver) => {
+      const vehicle = driver.allocations?.[0]?.vehicle;
+      return {
+        Driver: driver.staffName,
+        'Employee ID': driver.employeeId,
+        Location: driver.location?.name || driver.locationText || '',
+        'Current vehicle': vehicle?.registrationNumber || '',
+        'Vehicle type': vehicle?.vehicleType?.name || '',
+        'Vehicle age': vehicle?.age || '',
+        'Current service': vehicle?.serviceability || '',
+        Phone: driver.phone,
+        Status: driver.status.replaceAll('_', ' '),
+      };
+    }));
+  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -123,14 +157,19 @@ export default function DriversPage() {
       <PageHeader
         title="Drivers"
         description="Manage the approved driver register."
-        actions={
-          <button className="primary-action" onClick={() => setMode({ type: 'create' })}>
-            Add driver
-          </button>
-        }
+        actions={<><button className="secondary-action" onClick={exportDrivers}><Download size={16}/> Export CSV</button><button className="primary-action" onClick={() => setMode({ type: 'create' })}>Add driver</button></>}
       />
       {error && <div className="master-alert">{error}</div>}
       <section className="master-panel">
+        <div className="master-toolbar">
+          <label><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search driver, ID, vehicle or location"/></label>
+          <div className="master-filters">
+            <select aria-label="Filter drivers by location" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{uniqueOptions(items.map((item) => ({ id: item.location?.id || item.locationText || '', name: item.location?.name || item.locationText || '' }))).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+            <select aria-label="Filter drivers by vehicle type" value={vehicleTypeFilter} onChange={(event) => setVehicleTypeFilter(event.target.value)}><option value="">All vehicle types</option>{uniqueOptions(items.map((item) => item.allocations?.[0]?.vehicle.vehicleType)).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+            <select aria-label="Filter drivers by vehicle age" value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}><option value="">All vehicle ages</option>{unique(items.map((item) => item.allocations?.[0]?.vehicle.age)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
+            <select aria-label="Filter drivers by current service" value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)}><option value="">All service conditions</option>{unique(items.map((item) => item.allocations?.[0]?.vehicle.serviceability)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
+          </div>
+        </div>
         <div className="master-table-wrap">
           <table className="master-table">
             <thead>
@@ -138,10 +177,11 @@ export default function DriversPage() {
                 <th>S/N</th>
                 <th>Driver&apos;s Name</th>
                 <th>Location</th>
-                <th>Zone</th>
-                <th>Category</th>
                 <th>ID Number</th>
-                <th>Email</th>
+                <th>Current Vehicle</th>
+                <th>Vehicle Type</th>
+                <th>Vehicle Age</th>
+                <th>Current Service</th>
                 <th>Phone Number</th>
                 <th>Status</th>
                 <th>
@@ -161,10 +201,11 @@ export default function DriversPage() {
                     <button className="driver-name-button" onClick={(event) => { event.stopPropagation(); void viewDetails(driver); }}>{driver.staffName}</button>
                   </td>
                   <td>{driver.locationText || '—'}</td>
-                  <td>{driver.zone || '—'}</td>
-                  <td>{driver.category || '—'}</td>
                   <td>{driver.employeeId}</td>
-                  <td>{driver.email || '—'}</td>
+                  <td>{driver.allocations?.[0]?.vehicle.registrationNumber || '—'}</td>
+                  <td>{driver.allocations?.[0]?.vehicle.vehicleType?.name || '—'}</td>
+                  <td>{driver.allocations?.[0]?.vehicle.age || '—'}</td>
+                  <td>{driver.allocations?.[0]?.vehicle.serviceability || '—'}</td>
                   <td>{driver.phone}</td>
                   <td>{driver.status.replaceAll('_', ' ')}</td>
                   <td>
@@ -185,10 +226,10 @@ export default function DriversPage() {
             </tbody>
           </table>
         </div>
-        {items.length === 0 && (
+        {sortedItems.length === 0 && (
           <div className="master-empty">
-            <h2>No drivers yet</h2>
-            <p>Add the first approved driver.</p>
+            <h2>No matching drivers</h2>
+            <p>Change or clear the filters to view other drivers.</p>
           </div>
         )}
       </section>
@@ -320,4 +361,24 @@ function normaliseSerial(value?: string | null) {
   const text = (value || '').trim();
   const numeric = Number(text.replace(/[^0-9.]/g, ''));
   return { text: text || '999999999', numeric: Number.isFinite(numeric) && text ? numeric : null };
+}
+
+function unique(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+}
+
+function uniqueOptions(values: Array<{ id: string; name: string } | null | undefined>) {
+  return [...new Map(values.filter((value): value is { id: string; name: string } => Boolean(value?.id && value.name)).map((value) => [value.id, value])).values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function downloadCsv(fileName: string, rows: Record<string, string>[]) {
+  if (!rows.length) return;
+  const columns = Object.keys(rows[0]);
+  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const csv = [columns.map(escape).join(','), ...rows.map((row) => columns.map((column) => escape(row[column] ?? '')).join(','))].join('\r\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }

@@ -168,6 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {pathname === '/fleet/vehicles' && <CsvImportBar type="vehicles" />}
               {pathname === '/fleet/drivers' && <CsvImportBar type="drivers" />}
               {pathname === '/administration/locations' && <CsvImportBar type="locations" />}
+              {pathname === '/administration/departments' && <CsvImportBar type="departments" />}
               {pathname === '/administration/locations' && <LocationMapPanel />}
               {children}
             </>
