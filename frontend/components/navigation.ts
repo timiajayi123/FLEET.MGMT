@@ -3,7 +3,6 @@ import {
   Building2,
   CarFront,
   ClipboardList,
-  CreditCard,
   Fuel,
   LayoutDashboard,
   Map as MapIcon,
@@ -16,6 +15,8 @@ import {
   Truck,
   Users,
   Wrench,
+  Gauge,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -65,17 +66,53 @@ export const navigation: NavigationGroup[] = [
   {
     label: 'Operations',
     items: [
-      { label: 'GPS Tracking', href: '/operations/gps-tracking', icon: MapIcon, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
-      { label: 'Maintenance', href: '/operations/maintenance', icon: Wrench, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
+      {
+        label: 'GPS Tracking',
+        href: '/operations/gps-tracking',
+        icon: MapIcon,
+        roles: ['S_ADMIN', 'FM', 'DRIVER'],
+      },
+      {
+        label: 'Maintenance',
+        href: '/operations/maintenance',
+        icon: Wrench,
+        roles: ['S_ADMIN', 'FM', 'DRIVER'],
+      },
+      {
+        label: 'Speed & Overspeed',
+        href: '/operations/speed-overspeed',
+        icon: Gauge,
+        roles: ['S_ADMIN', 'FM'],
+      },
     ],
   },
   {
     label: 'Fuel',
     items: [
-      { label: 'Fuel Dashboard', href: '/fuel/dashboard', icon: LayoutDashboard, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
-      { label: 'Fuel Operations', href: '/fuel/operations', icon: Fuel, roles: ['S_ADMIN', 'FM', 'DRIVER'] },
-      { label: 'Fuel Cards', href: '/fuel/cards', icon: CreditCard, roles: ['S_ADMIN', 'FM'] },
-      { label: 'Stations & Prices', href: '/fuel/stations', icon: MapPin, roles: ['S_ADMIN', 'FM'] },
+      {
+        label: 'Fuel Dashboard',
+        href: '/fuel/dashboard',
+        icon: LayoutDashboard,
+        roles: ['S_ADMIN', 'FM'],
+      },
+      {
+        label: 'Fuel Entry',
+        href: '/fuel/operations',
+        icon: Fuel,
+        roles: ['DRIVER'],
+      },
+      {
+        label: 'Fuel History',
+        href: '/fuel/history',
+        icon: History,
+        roles: ['S_ADMIN', 'FM', 'DRIVER'],
+      },
+      {
+        label: 'Fuel Stations',
+        href: '/fuel/stations',
+        icon: MapPin,
+        roles: ['S_ADMIN', 'FM'],
+      },
     ],
   },
   {
@@ -87,10 +124,24 @@ export const navigation: NavigationGroup[] = [
         icon: ShieldCheck,
         roles: ['S_ADMIN'],
       },
-      { label: 'Directorates', href: '/administration/directorates', icon: Building2, roles: ['S_ADMIN'] },
-      { label: 'Departments', href: '/administration/departments', icon: Building2, roles: ['S_ADMIN'] },
-      { label: 'Locations', href: '/administration/locations', icon: MapPin, roles: ['S_ADMIN'] },
-      { label: 'Vehicle Types', href: '/administration/vehicle-types', icon: Tags, roles: ['S_ADMIN'] },
+      {
+        label: 'Directorates',
+        href: '/administration/directorates',
+        icon: Building2,
+        roles: ['S_ADMIN'],
+      },
+      {
+        label: 'Departments',
+        href: '/administration/departments',
+        icon: Building2,
+        roles: ['S_ADMIN'],
+      },
+      {
+        label: 'Vehicle Types',
+        href: '/administration/vehicle-types',
+        icon: Tags,
+        roles: ['S_ADMIN'],
+      },
     ],
   },
   {
@@ -102,13 +153,19 @@ export const navigation: NavigationGroup[] = [
   {
     label: 'AI',
     items: [
-      { label: 'AI Assistant', href: '/ai/fleet-optimization', icon: Sparkles, roles: ['S_ADMIN', 'FM'] },
+      {
+        label: 'AI Assistant',
+        href: '/ai/fleet-optimization',
+        icon: Sparkles,
+        roles: ['S_ADMIN', 'FM'],
+      },
     ],
   },
   {
     label: 'System',
     items: [
       { label: 'Settings', href: '/settings', icon: Settings, roles: ['S_ADMIN'] },
+      { label: 'Locations', href: '/administration/locations', icon: MapPin, roles: ['S_ADMIN'] },
       { label: 'Users', href: '/administration/users', icon: Users, roles: ['S_ADMIN'] },
     ],
   },
@@ -147,11 +204,14 @@ export function visibleNavigation(roleCode?: string) {
 export function canAccessPath(pathname: string, roleCode?: string) {
   if (!roleCode) return false;
   if (pathname === '/dashboard' || pathname === '/profile') return true;
-  if (pathname === '/operations/fuel-management') return ['S_ADMIN', 'FM', 'DRIVER'].includes(roleCode);
+  if (pathname === '/operations/fuel-management')
+    return ['S_ADMIN', 'FM', 'DRIVER'].includes(roleCode);
   const items = navigation
     .flatMap((group) => group.items)
     .sort((a, b) => b.href.length - a.href.length);
-  const matchingItems = items.filter((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`));
+  const matchingItems = items.filter(
+    (entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`),
+  );
   return matchingItems.length
     ? matchingItems.some((item) => canAccessNavigationItem(item, roleCode))
     : false;

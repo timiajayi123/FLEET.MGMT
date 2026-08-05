@@ -108,7 +108,7 @@ export default function TripsPage() {
         <article><strong>{items.length}</strong><span>Total trips</span></article>
         <article className="green"><strong>{completed}</strong><span>Completed</span></article>
         <article className="yellow"><strong>{inProgress}</strong><span>In progress</span></article>
-        <article><strong>{totalDistance.toFixed(1)} km</strong><span>Recorded distance</span></article>
+        <article><strong>{totalDistance.toFixed(2)} km</strong><span>Recorded distance</span></article>
       </section>
       <section className="fleet-toolbar">
         <label><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search request, staff, driver, vehicle or destination" /></label>
@@ -145,7 +145,7 @@ export default function TripsPage() {
               <TripFact icon={<CarFront size={16} />} label="Vehicle" value={`${trip.vehicle.registrationNumber} - ${trip.vehicle.manufacturer} ${trip.vehicle.model}`} />
               <TripFact icon={<MapPin size={16} />} label="Schedule" value={`${formatDate(trip.allocation.startAt)} → ${formatDate(trip.allocation.expectedEndAt)}`} />
               <TripFact icon={<Navigation size={16} />} label="Actual trip" value={`${trip.startedAt ? formatDate(trip.startedAt) : 'Not started'} → ${trip.endedAt ? formatDate(trip.endedAt) : 'Not ended'}`} />
-              <TripFact icon={<BarChart3 size={16} />} label="GPS summary" value={`${trip._count.locationHistory} point${trip._count.locationHistory === 1 ? '' : 's'} · ${(trip.calculatedDistance ?? 0).toFixed(1)} km · max ${toKmh(trip.maximumSpeed)} km/h`} />
+              <TripFact icon={<BarChart3 size={16} />} label="GPS summary" value={`${trip._count.locationHistory} point${trip._count.locationHistory === 1 ? '' : 's'} · ${(trip.calculatedDistance ?? 0).toFixed(2)} km · max ${toKmh(trip.maximumSpeed)} km/h`} />
             </div>
             <p>{trip.request?.purposeOfTrip || trip.allocation.purpose}</p>
             <footer className="trip-card-actions">

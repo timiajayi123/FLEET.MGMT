@@ -27,6 +27,9 @@ const select = {
   status: true,
   locationId: true,
   vehicleTypeId: true,
+  customSpeedLimit: true,
+  previousOdometer: true,
+  currentOdometer: true,
   imageMimeType: true,
   location: { select: { id: true, name: true, code: true } },
   vehicleType: { select: { id: true, name: true, code: true } },
@@ -38,44 +41,33 @@ const select = {
 export class VehiclesService {
   constructor(private prisma: PrismaService) {}
   list() {
-    return this.prisma.$queryRaw`
-      SELECT
-        TOP (1000)
-        id,
-        registrationNumber,
-        serialNumber,
-        locationUser,
-        privateRegistrationNumber,
-        officialRegistrationNumber,
-        manufacturer,
-        model,
-        year,
-        purchaseCost,
-        bookedValue,
-        estimatedCost,
-        reservedPresentValue,
-        age,
-        serviceability,
-        legacyAgency,
-        chassisNumber,
-        engineNumber,
-        remark,
-        faultDescription,
-        color,
-        status,
-        locationId,
-        vehicleTypeId,
-        imageMimeType,
-        createdAt,
-        updatedAt
-      FROM dbo.vehicles WITH (NOLOCK)
-    `;
+    return this.prisma.vehicle.findMany({
+      take: 1000,
+      orderBy: { createdAt: 'desc' },
+      select,
+    });
   }
   create(dto: SaveVehicleDto) {
     return this.prisma.vehicle.create({ data: this.data(dto), select });
   }
-  update(id: string, dto: SaveVehicleDto) {
-    return this.prisma.vehicle.update({ where: { id }, data: this.data(dto), select });
+  async update(id: string, dto: SaveVehicleDto) {
+    const existing = await this.prisma.vehicle.findUnique({
+      where: { id },
+      select: { currentOdometer: true, previousOdometer: true },
+    });
+    if (!existing) throw new NotFoundException('Vehicle not found.');
+    const data = this.data(dto);
+    const existingCurrent = existing.currentOdometer == null ? null : Number(existing.currentOdometer);
+    if (dto.currentOdometer !== undefined && dto.currentOdometer !== existingCurrent) {
+      if (existingCurrent !== null && dto.currentOdometer < existingCurrent)
+        throw new BadRequestException('Current odometer cannot be lower than the vehicle\'s current reading.');
+      data.previousOdometer = existingCurrent ?? (existing.previousOdometer == null ? null : Number(existing.previousOdometer));
+      data.currentOdometer = dto.currentOdometer;
+    } else {
+      const { previousOdometer: _previousOdometer, currentOdometer: _currentOdometer, ...dataWithoutOdometer } = data;
+      return this.prisma.vehicle.update({ where: { id }, data: dataWithoutOdometer, select });
+    }
+    return this.prisma.vehicle.update({ where: { id }, data, select });
   }
   async remove(id: string) {
     const [a, c, h] = await this.prisma.$transaction([
@@ -277,6 +269,8 @@ export class VehiclesService {
       engineNumber: dto.engineNumber?.trim() || null,
       remark: dto.remark?.trim() || null,
       faultDescription: dto.faultDescription?.trim() || null,
+      previousOdometer: dto.previousOdometer ?? null,
+      currentOdometer: dto.currentOdometer ?? null,
     };
   }
   private registrationNumber(dto: SaveVehicleDto) {

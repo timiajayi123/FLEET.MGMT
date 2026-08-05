@@ -3,11 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { FleetGateway } from './fleet.gateway';
 import { TrackingPointDto } from './tracking.dto';
+import { SpeedService } from '../speed/speed.service';
 
 @Injectable()
 export class TrackingService {
   private readonly lastPost = new Map<string, number>();
-  constructor(private readonly prisma: PrismaService, private readonly gateway: FleetGateway) {}
+  constructor(private readonly prisma: PrismaService, private readonly gateway: FleetGateway, private readonly speed: SpeedService) {}
 
   async save(user: { id: string; employeeId: string; role: { code: string } }, dto: TrackingPointDto, batch = false) {
     if (!batch) {
@@ -38,16 +39,40 @@ export class TrackingService {
     });
     const event = { vehicleId: allocation.vehicleId, driverId: allocation.driverId, allocationId: allocation.id, tripId: allocation.trip.id, latitude: result.latitude, longitude: result.longitude, speed: result.speed, heading: result.heading, accuracy: result.accuracy, recordedAt: result.recordedAt, isSimulated: result.isSimulated };
     this.gateway.publishLocation(event);
+    if (result.speed != null) {
+      const speedResult = await this.speed.processReading({
+        vehicleId: allocation.vehicleId, driverId: allocation.driverId, tripId: allocation.trip.id,
+        speedKmh: result.speed * 3.6, latitude: result.latitude, longitude: result.longitude,
+        recordedAt: result.recordedAt, source: simulated ? 'SIMULATOR' : 'PHONE_GPS',
+      });
+      if (speedResult.alert) this.gateway.publishOverspeed(speedResult.alert);
+    }
     return { success: true, duplicate: false, ...event };
   }
 
   async live() {
     const now = Date.now();
     const data = await this.prisma.driverCurrentLocation.findMany({
-      where: { trip: { status: 'IN_PROGRESS' }, allocation: { requestId: { not: null }, request: { status: 'ALLOCATED' } } },
+      where: { vehicleId: { not: null } },
       include: { driver: true, vehicle: { include: { vehicleType: true } }, trip: true, allocation: { include: { request: { include: { requester: true } } } } },
+      orderBy: { recordedAt: 'desc' },
     });
-    return { data: data.map((item) => ({ ...item, connectionStatus: now - item.recordedAt.getTime() > 5 * 60_000 ? 'OFFLINE' : now - item.recordedAt.getTime() > 60_000 ? 'STALE' : item.speed && item.speed > 1 ? 'MOVING' : 'STATIONARY' })), generatedAt: new Date() };
+    const latestByVehicle = new Map<string, (typeof data)[number]>();
+    for (const item of data) {
+      if (item.vehicleId && item.vehicle && !latestByVehicle.has(item.vehicleId)) latestByVehicle.set(item.vehicleId, item);
+    }
+    return {
+      data: [...latestByVehicle.values()].map((item) => {
+        const age = now - item.recordedAt.getTime();
+        const hasActiveTrip = item.trip?.status === 'IN_PROGRESS' && item.allocation?.status === 'IN_PROGRESS';
+        return {
+          ...item,
+          isLastKnownLocation: !hasActiveTrip || age > 5 * 60_000,
+          connectionStatus: !hasActiveTrip || age > 5 * 60_000 ? 'OFFLINE' : age > 60_000 ? 'STALE' : item.speed && item.speed > 1 ? 'MOVING' : 'STATIONARY',
+        };
+      }),
+      generatedAt: new Date(),
+    };
   }
 
   vehicleHistory(vehicleId: string, from?: Date) {

@@ -10,7 +10,10 @@ const ALLOWED_ATTACHMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'imag
 
 @Injectable()
 export class VehicleRequestsService {
-  constructor(private readonly prisma: PrismaService, private readonly allocations: AllocationsService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly allocations: AllocationsService,
+  ) {}
 
   list(user: { id: string; role: { code: string } }) {
     return this.prisma.vehicleRequest.findMany({
@@ -30,17 +33,25 @@ export class VehicleRequestsService {
     if (!['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status)) {
       throw new BadRequestException('An allocated or completed request cannot be changed.');
     }
-    return this.prisma.vehicleRequest.update({ where: { id }, data: { status }, omit: { attachmentData: true } });
+    return this.prisma.vehicleRequest.update({
+      where: { id },
+      data: { status },
+      omit: { attachmentData: true },
+    });
   }
 
   async approve(id: string, assignedById: string, dto?: Partial<ApproveRequestAllocationDto>) {
     if (dto?.vehicleId && dto?.driverId && dto?.startAt && dto?.expectedEndAt) {
       return this.allocations.assignRequest(id, dto as ApproveRequestAllocationDto, assignedById);
     }
-    throw new BadRequestException('Approving a vehicle request requires allocating a vehicle and driver.');
+    return this.setStatus(id, 'APPROVED');
   }
 
-  async create(dto: CreateVehicleRequestDto, attachment?: Express.Multer.File, requesterId?: string) {
+  async create(
+    dto: CreateVehicleRequestDto,
+    attachment?: Express.Multer.File,
+    requesterId?: string,
+  ) {
     const departureDate = new Date(dto.departureDate);
     const expectedReturnDate = new Date(dto.expectedReturnDate);
 
@@ -53,24 +64,41 @@ export class VehicleRequestsService {
     }
 
     const [location, directorate, department, vehicleType] = await Promise.all([
-      dto.locationId ? this.prisma.location.findFirst({ where: { id: dto.locationId, status: MasterDataStatus.ACTIVE } }) : null,
+      dto.locationId
+        ? this.prisma.location.findFirst({
+            where: { id: dto.locationId, status: MasterDataStatus.ACTIVE },
+          })
+        : null,
       this.prisma.directorate.findFirst({
         where: { id: dto.directorateId, status: MasterDataStatus.ACTIVE },
       }),
-      dto.departmentId ? this.prisma.department.findFirst({ where: { id: dto.departmentId, status: MasterDataStatus.ACTIVE } }) : null,
+      dto.departmentId
+        ? this.prisma.department.findFirst({
+            where: { id: dto.departmentId, status: MasterDataStatus.ACTIVE },
+          })
+        : null,
       this.prisma.vehicleType.findFirst({
         where: { id: dto.vehicleTypeId, status: MasterDataStatus.ACTIVE },
       }),
     ]);
 
-    if (!directorate || !vehicleType || (dto.locationId && !location) || (dto.departmentId && !department)) {
+    if (
+      !directorate ||
+      !vehicleType ||
+      (dto.locationId && !location) ||
+      (dto.departmentId && !department)
+    ) {
       throw new BadRequestException('One or more selected master-data records are unavailable.');
     }
     if (department && department.directorateId !== directorate.id) {
       throw new BadRequestException('The selected department does not match the directorate.');
     }
     const destinationFrom = (location?.name ?? dto.customPickupLocation ?? '').trim();
-    if (destinationFrom.localeCompare(dto.destination.trim(), undefined, { sensitivity: 'accent' }) === 0) {
+    if (
+      destinationFrom.localeCompare(dto.destination.trim(), undefined, {
+        sensitivity: 'accent',
+      }) === 0
+    ) {
       throw new BadRequestException('Destination From and Destination To must be different.');
     }
 
@@ -88,7 +116,7 @@ export class VehicleRequestsService {
         location: location?.name ?? dto.customPickupLocation!,
         directorate: directorate.name,
         department: department?.name ?? dto.customDepartment!,
-        unit: dto.customUnit,
+        unit: dto.customUnit ?? '',
         purposeOfTrip: dto.purposeOfTrip,
         tripCategory: dto.purposeOfTrip,
         vehicleTypeName: vehicleType.name,
@@ -115,6 +143,6 @@ export class VehicleRequestsService {
 
   private createRequestNumber(): string {
     const year = new Date().getUTCFullYear();
-    return `FMR-${year}-${randomUUID().slice(0, 8).toUpperCase()}`;
+    return `VR-${year}-${randomUUID().slice(0, 8).toUpperCase()}`;
   }
 }

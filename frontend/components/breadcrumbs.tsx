@@ -30,13 +30,17 @@ export function Breadcrumbs() {
       speed: 'Speed Violation Report',
       utilisation: 'Vehicle Utilisation Report',
       maintenance: 'Maintenance Report',
+      fuel: 'Fuel Recorded and Distance Covered',
     };
     return (
       <nav className="breadcrumbs" aria-label="Breadcrumb">
         {report && reportLabels[report] ? (
           <>
             <Link href="/analytics/reports">Reports</Link>
-            <span><ChevronRight size={13} /><span aria-current="page">{reportLabels[report]}</span></span>
+            <span>
+              <ChevronRight size={13} />
+              <span aria-current="page">{reportLabels[report]}</span>
+            </span>
           </>
         ) : (
           <span aria-current="page">Reports</span>

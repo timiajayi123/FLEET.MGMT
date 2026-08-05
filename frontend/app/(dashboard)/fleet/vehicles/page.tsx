@@ -28,7 +28,12 @@ type Vehicle = {
   color?: string | null;
   status: string;
   locationId?: string | null;
+  location?: { id: string; name: string; code?: string | null } | null;
   vehicleTypeId?: string | null;
+  vehicleType?: { id: string; name: string; code?: string | null } | null;
+  customSpeedLimit?: number | null;
+  previousOdometer?: number | string | null;
+  currentOdometer?: number | string | null;
   imageMimeType?: string;
 };
 type Option = { id: string; name: string };
@@ -64,18 +69,37 @@ export default function VehiclesPage() {
     });
   }, []);
 
+  const tableLocations = useMemo(
+    () => unique(items.map((vehicle) => vehicle.location?.name || vehicle.locationUser)),
+    [items],
+  );
+  const tableVehicleTypes = useMemo(
+    () =>
+      unique(
+        items.map(
+          (vehicle) =>
+            vehicle.vehicleType?.name || `${vehicle.manufacturer} ${vehicle.model}`.trim(),
+        ),
+      ),
+    [items],
+  );
+
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase();
     return items
       .filter((vehicle) => {
-        if (locationFilter && vehicle.locationId !== locationFilter && vehicle.locationUser !== locationFilter) return false;
-        if (vehicleTypeFilter && vehicle.vehicleTypeId !== vehicleTypeFilter) return false;
+        const tableLocation = vehicle.location?.name || vehicle.locationUser || '';
+        if (locationFilter && tableLocation !== locationFilter) return false;
+        const tableVehicleType =
+          vehicle.vehicleType?.name || `${vehicle.manufacturer} ${vehicle.model}`.trim();
+        if (vehicleTypeFilter && tableVehicleType !== vehicleTypeFilter) return false;
         if (ageFilter && vehicle.age !== ageFilter) return false;
         if (serviceFilter && vehicle.serviceability !== serviceFilter) return false;
         if (!search) return true;
         return [
         vehicle.serialNumber,
         vehicle.locationUser,
+        vehicle.location?.name,
         vehicle.privateRegistrationNumber,
         vehicle.officialRegistrationNumber,
         vehicle.registrationNumber,
@@ -104,7 +128,7 @@ export default function VehiclesPage() {
   function exportVehicles() {
     downloadCsv('vehicles.csv', filteredItems.map((vehicle) => ({
       'Plate number': vehicle.officialRegistrationNumber || vehicle.privateRegistrationNumber || vehicle.registrationNumber,
-      Location: locations.find((option) => option.id === vehicle.locationId)?.name || vehicle.locationUser || '',
+      Location: vehicle.location?.name || locations.find((option) => option.id === vehicle.locationId)?.name || vehicle.locationUser || '',
       'Vehicle type': vehicleTypes.find((option) => option.id === vehicle.vehicleTypeId)?.name || `${vehicle.manufacturer} ${vehicle.model}`.trim(),
       Age: vehicle.age || '',
       'Year of purchase': vehicle.year || '',
@@ -290,8 +314,8 @@ export default function VehiclesPage() {
             >
               <Trash2 size={15} /> Delete selected ({selectedIds.length})
             </button>
-            <select aria-label="Filter vehicles by location" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{locations.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
-            <select aria-label="Filter vehicles by vehicle type" value={vehicleTypeFilter} onChange={(event) => setVehicleTypeFilter(event.target.value)}><option value="">All vehicle types</option>{vehicleTypes.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
+            <select aria-label="Filter vehicles by location" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{tableLocations.map((location) => <option key={location} value={location}>{location}</option>)}</select>
+            <select aria-label="Filter vehicles by vehicle type" value={vehicleTypeFilter} onChange={(event) => setVehicleTypeFilter(event.target.value)}><option value="">All vehicle types</option>{tableVehicleTypes.map((vehicleType) => <option key={vehicleType} value={vehicleType}>{vehicleType}</option>)}</select>
             <select aria-label="Filter vehicles by age" value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}><option value="">All ages</option>{unique(items.map((item) => item.age)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
             <select aria-label="Filter vehicles by current service" value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)}><option value="">All service conditions</option>{unique(items.map((item) => item.serviceability)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
           </div>
@@ -309,7 +333,7 @@ export default function VehiclesPage() {
                   />
                 </th>
                 <th>S/N</th>
-                <th>Location/User</th>
+                <th>Location</th>
                 <th>Vehicle Type/Make</th>
                 <th>Private Reg. Number</th>
                 <th>Official Reg. Number</th>
@@ -340,8 +364,8 @@ export default function VehiclesPage() {
                     )}
                     {vehicle.serialNumber || '—'}
                   </td>
-                  <td>{vehicle.locationUser || '—'}</td>
-                  <td>{`${vehicle.manufacturer} ${vehicle.model}`.trim()}</td>
+                  <td>{vehicle.location?.name || vehicle.locationUser || '—'}</td>
+                  <td>{vehicle.vehicleType?.name || `${vehicle.manufacturer} ${vehicle.model}`.trim()}</td>
                   <td>{vehicle.privateRegistrationNumber || '—'}</td>
                   <td>{vehicle.officialRegistrationNumber || '—'}</td>
                   <td>{vehicle.age || '—'}</td>
@@ -418,7 +442,7 @@ function VehicleModal({
         <form onSubmit={onSubmit}>
           <div className="master-form-grid">
             <Field name="serialNumber" label="S/N" value={vehicle?.serialNumber} required={false} />
-            <Field name="locationUser" label="Location/User" value={vehicle?.locationUser} required={false} />
+            <Field name="locationUser" label="Location" value={vehicle?.locationUser} required={false} />
             <Field name="manufacturer" label="Manufacturer" value={vehicle?.manufacturer} />
             <Field name="model" label="Model" value={vehicle?.model} />
             <Field name="privateRegistrationNumber" label="Private reg. number" value={vehicle?.privateRegistrationNumber} required={false} />
@@ -434,6 +458,8 @@ function VehicleModal({
             <Field name="chassisNumber" label="Chassis number" value={vehicle?.chassisNumber} required={false} />
             <Field name="engineNumber" label="Engine number" value={vehicle?.engineNumber} required={false} />
             <Field name="color" label="Color" value={vehicle?.color} required={false} />
+            <Field name="previousOdometer" label="Previous odometer (km, one-time setup)" type="number" value={vehicle?.previousOdometer} required={false} disabled={Boolean(vehicle?.previousOdometer != null)} />
+            <Field name="currentOdometer" label="Current odometer (km)" type="number" value={vehicle?.currentOdometer} required={false} />
             <label className="master-field">
               <span>Status</span>
               <select name="status" defaultValue={vehicle?.status ?? 'AVAILABLE'}>
@@ -471,6 +497,7 @@ function Field({
   required = true,
   value,
   full = false,
+  disabled = false,
 }: {
   name: string;
   label: string;
@@ -478,11 +505,12 @@ function Field({
   required?: boolean;
   value?: string | number | null;
   full?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <label className={`master-field ${full ? 'full' : ''}`}>
       <span>{label}</span>
-      <input name={name} type={type} required={required} defaultValue={value ?? ''} />
+      <input name={name} type={type} required={required} defaultValue={value ?? ''} disabled={disabled} />
     </label>
   );
 }

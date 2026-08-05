@@ -1,7 +1,8 @@
 'use client';
 
+import { GpsSpeedometer } from '@/components/gps-speedometer';
 import { loadGoogleMaps, type GoogleMap, type GoogleMapsNamespace, type GoogleMarker } from '@/lib/google-maps';
-import { Crosshair, Expand, List, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, Search, Square } from 'lucide-react';
+import { ChevronUp, Crosshair, Expand, List, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, Search, Square } from 'lucide-react';
 import { io, type Socket } from 'socket.io-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -18,11 +19,12 @@ type Position = {
   accuracy?: number;
   recordedAt: string;
   isSimulated: boolean;
+  isLastKnownLocation?: boolean;
   connectionStatus: 'MOVING' | 'STATIONARY' | 'STALE' | 'OFFLINE';
   driver: { staffName: string; employeeId: string; phone: string };
   vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; vehicleType?: { id: string; name: string; mapIcon?: string | null; mapIconMimeType?: string | null } };
-  trip: { id: string; status: string };
-  allocation: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string } };
+  trip?: { id: string; status: string } | null;
+  allocation?: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string } } | null;
 };
 type Allocation = { id: string; status: string; destination?: string; vehicle: { registrationNumber: string }; driver: { staffName: string }; trip?: { id: string; status: string } };
 type VehicleIconKind = 'BUS' | 'TRUCK' | 'PICKUP' | 'VAN' | 'SUV' | 'MOTORCYCLE' | 'CAR';
@@ -124,8 +126,8 @@ export function LiveFleetMap() {
   }, []);
 
   const visible = useMemo(() => positions.filter((position) => {
-    const text = `${position.vehicle.registrationNumber} ${position.vehicle.manufacturer} ${position.vehicle.model} ${position.driver.staffName} ${position.allocation.destination ?? ''}`.toLowerCase();
-    return (!query || text.includes(query.toLowerCase())) && (filter === 'ALL' || position.connectionStatus === filter || (filter === 'EMERGENCY' && Boolean((position.allocation as { emergencyAt?: string }).emergencyAt)));
+    const text = `${position.vehicle.registrationNumber} ${position.vehicle.manufacturer} ${position.vehicle.model} ${position.driver.staffName} ${position.allocation?.destination ?? ''}`.toLowerCase();
+    return (!query || text.includes(query.toLowerCase())) && (filter === 'ALL' || position.connectionStatus === filter || (filter === 'EMERGENCY' && Boolean((position.allocation as { emergencyAt?: string } | null)?.emergencyAt)));
   }), [positions, query, filter]);
 
   useEffect(() => {
@@ -145,16 +147,15 @@ export function LiveFleetMap() {
         const currentMarker = marker;
         currentMarker.addListener('click', () => {
           const current = latestPositions.current.get(position.vehicleId) ?? position;
-          setSelectedVehicleId(current.vehicleId);
           info.current?.setContent(popup(current));
           info.current?.open({ anchor: currentMarker, map });
         });
         markers.current.set(position.vehicleId, marker);
       }
       marker.setPosition(point);
-      marker.setTitle(`${position.vehicle.registrationNumber} - ${position.driver.staffName}`);
+      marker.setTitle(`${position.vehicle.registrationNumber} - ${position.driver.staffName}${position.connectionStatus === 'OFFLINE' ? ' - OFFLINE (last known location)' : ''}`);
       marker.setLabel({
-        text: mapSpeedLabel(position.speed),
+        text: position.connectionStatus === 'OFFLINE' ? 'OFFLINE' : mapSpeedLabel(position.speed),
         color: '#0f172a',
         fontSize: '13px',
         fontWeight: '900',
@@ -223,7 +224,7 @@ export function LiveFleetMap() {
     stationary: positions.filter((p) => p.connectionStatus === 'STATIONARY').length,
     stale: positions.filter((p) => ['STALE', 'OFFLINE'].includes(p.connectionStatus)).length,
   };
-  const selectedPosition = visible.find((position) => position.vehicleId === selectedVehicleId) ?? visible[0];
+  const selectedPosition = visible.find((position) => position.vehicleId === selectedVehicleId);
 
   return (
     <div className="live-fleet-page">
@@ -265,29 +266,50 @@ export function LiveFleetMap() {
           <header><strong>{visible.length} vehicles</strong><small>Last sync {syncAt ? syncAt.toLocaleTimeString() : '--'}</small></header>
           {selectedPosition && (
             <section className="admin-driver-detail">
-              <div>
-                <strong>{selectedPosition.driver.staffName}</strong>
-                <small>{selectedPosition.driver.employeeId} - {selectedPosition.driver.phone || 'No phone'}</small>
+              <div className="admin-driver-detail-heading">
+                <div>
+                  <strong>{selectedPosition.driver.staffName}</strong>
+                  <small>{selectedPosition.driver.employeeId} - {selectedPosition.driver.phone || 'No phone'}</small>
+                </div>
+                <button type="button" onClick={() => setSelectedVehicleId('')} aria-label="Hide selected vehicle details">
+                  <ChevronUp />
+                  Hide details
+                </button>
               </div>
-              <AdminSpeedCard speedMetresPerSecond={selectedPosition.speed} recordedAt={selectedPosition.recordedAt} />
+              <GpsSpeedometer
+                className="admin-live-speedometer"
+                speedMetresPerSecond={selectedPosition.speed}
+                recordedAt={selectedPosition.recordedAt}
+              />
               <dl>
                 <div><dt>Vehicle</dt><dd>{selectedPosition.vehicle.registrationNumber}</dd></div>
                 <div><dt>Type</dt><dd>{vehicleIconLabel(vehicleIconKind(selectedPosition))}</dd></div>
                 <div><dt>Status</dt><dd>{selectedPosition.connectionStatus}</dd></div>
                 <div><dt>Accuracy</dt><dd>{selectedPosition.accuracy ? `${Math.round(selectedPosition.accuracy)} m` : '--'}</dd></div>
-                <div><dt>Destination</dt><dd>{selectedPosition.allocation.destination || 'No destination'}</dd></div>
-                <div><dt>Last update</dt><dd>{new Date(selectedPosition.recordedAt).toLocaleTimeString()}</dd></div>
+                <div><dt>Destination</dt><dd>{selectedPosition.allocation?.destination || 'No active destination'}</dd></div>
+                <div><dt>{selectedPosition.connectionStatus === 'OFFLINE' ? 'Last known at' : 'Last update'}</dt><dd>{new Date(selectedPosition.recordedAt).toLocaleString()}</dd></div>
+                <div><dt>Coordinates</dt><dd>{selectedPosition.latitude.toFixed(5)}, {selectedPosition.longitude.toFixed(5)}</dd></div>
               </dl>
             </section>
           )}
           {visible.map((position) => (
-            <button className={selectedPosition?.vehicleId === position.vehicleId ? 'selected' : ''} key={position.vehicleId} onClick={() => { setSelectedVehicleId(position.vehicleId); mapRef.current?.panTo({ lat: position.latitude, lng: position.longitude }); mapRef.current?.setZoom(17); }}>
+            <button
+              className={selectedPosition?.vehicleId === position.vehicleId ? 'selected' : ''}
+              key={position.vehicleId}
+              type="button"
+              aria-expanded={selectedPosition?.vehicleId === position.vehicleId}
+              onClick={() => {
+                setSelectedVehicleId((current) => current === position.vehicleId ? '' : position.vehicleId);
+                mapRef.current?.panTo({ lat: position.latitude, lng: position.longitude });
+                mapRef.current?.setZoom(17);
+              }}
+            >
               <i style={{ background: color(position.connectionStatus) }} />
               <span>
                 <strong>{position.vehicle.registrationNumber}</strong>
                 <small>{vehicleIconLabel(vehicleIconKind(position))} - {position.driver.staffName} - {position.vehicle.manufacturer} {position.vehicle.model}</small>
-                <small>{position.allocation.destination || 'No destination'}</small>
-                <em>{position.connectionStatus} - {Math.round((position.speed ?? 0) * 3.6)} km/h - {position.isSimulated ? 'SIMULATED - ' : ''}{new Date(position.recordedAt).toLocaleTimeString()}</em>
+                <small>{position.allocation?.destination || 'No active destination'}</small>
+                <em>{position.connectionStatus} - {Math.round((position.speed ?? 0) * 3.6)} km/h - {position.isSimulated ? 'SIMULATED - ' : ''}{position.connectionStatus === 'OFFLINE' ? 'Last seen ' : ''}{new Date(position.recordedAt).toLocaleString()}</em>
               </span>
             </button>
           ))}
@@ -394,16 +416,9 @@ function vehicleMarkerSvg(kind: VehicleIconKind, fill: string) {
   </svg>`;
 }
 
-function AdminSpeedCard({ speedMetresPerSecond, recordedAt }: { speedMetresPerSecond?: number; recordedAt?: string }) {
-  const hasSpeed = typeof speedMetresPerSecond === 'number' && Number.isFinite(speedMetresPerSecond);
-  const speed = hasSpeed ? Math.max(0, Math.round(speedMetresPerSecond * 3.6)) : null;
-  const percent = Math.min(100, ((speed ?? 0) / 120) * 100);
-
-  return <div className="speed-card admin-speed-card" role="meter" aria-label={hasSpeed ? `Current speed ${speed} kilometres per hour` : 'Current speed unavailable'} aria-valuemin={0} aria-valuemax={120} aria-valuenow={speed ?? undefined}><div className="speed-card-top"><span>Driver speed</span><strong>{speed ?? '—'}<small>km/h</small></strong></div><div className="speed-bar" aria-hidden="true"><i style={{ width: `${percent}%` }}/></div><div className="speed-card-scale"><span>0</span><span>60</span><span>120+</span></div><p>{hasSpeed ? `Latest GPS point · ${recordedAt ? new Date(recordedAt).toLocaleTimeString() : 'now'}` : 'No GPS speed value yet.'}</p></div>;
-}
-
 function popup(position: Position) {
-  return `<div class="google-map-popup"><strong>${escape(position.vehicle.registrationNumber)} - ${escape(position.vehicle.manufacturer)} ${escape(position.vehicle.model)}</strong><p><b>Vehicle icon:</b> ${vehicleIconLabel(vehicleIconKind(position))}${position.vehicle.vehicleType?.name ? ` (${escape(position.vehicle.vehicleType.name)})` : ''}</p><p><b>Driver:</b> ${escape(position.driver.staffName)} (${escape(position.driver.employeeId)})</p><p><b>Destination:</b> ${escape(position.allocation.destination ?? 'No destination')}</p><p class="google-map-speed"><b>Live speed</b> ${mapSpeedLabel(position.speed)}</p><p><b>Accuracy:</b> ${Math.round(position.accuracy ?? 0)}m - <b>Status:</b> ${position.connectionStatus}${position.isSimulated ? ' - SIMULATED' : ''}</p><p>${escape(position.allocation.purpose)}</p></div>`;
+  const offline = position.connectionStatus === 'OFFLINE';
+  return `<div class="google-map-popup"><strong>${escape(position.vehicle.registrationNumber)} - ${escape(position.vehicle.manufacturer)} ${escape(position.vehicle.model)}</strong>${offline ? '<p class="google-map-offline"><b>OFFLINE</b> · Showing the last known vehicle location</p>' : ''}<p><b>Vehicle icon:</b> ${vehicleIconLabel(vehicleIconKind(position))}${position.vehicle.vehicleType?.name ? ` (${escape(position.vehicle.vehicleType.name)})` : ''}</p><p><b>Driver:</b> ${escape(position.driver.staffName)} (${escape(position.driver.employeeId)})</p><p><b>Destination:</b> ${escape(position.allocation?.destination ?? 'No active destination')}</p><p class="google-map-speed"><b>${offline ? 'Last recorded speed' : 'Live speed'}</b> ${mapSpeedLabel(position.speed)}</p><p><b>Accuracy:</b> ${Math.round(position.accuracy ?? 0)}m - <b>Status:</b> ${position.connectionStatus}${position.isSimulated ? ' - SIMULATED' : ''}</p><p><b>${offline ? 'Last seen' : 'Updated'}:</b> ${escape(new Date(position.recordedAt).toLocaleString())}</p><p><b>Coordinates:</b> ${position.latitude.toFixed(5)}, ${position.longitude.toFixed(5)}</p>${position.allocation?.purpose ? `<p>${escape(position.allocation.purpose)}</p>` : ''}</div>`;
 }
 
 function escape(value: string) {

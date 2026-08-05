@@ -15,20 +15,51 @@ export class DashboardService {
 
   private async adminSummary(days: number) {
     const since = rangeStart(days);
-    const [totalRequests, pendingRequests, approvedRequests, activeUsers, activeAllocations, completedTrips, recent, queue] = await Promise.all([
+    const [
+      totalRequests,
+      pendingRequests,
+      approvedRequests,
+      activeUsers,
+      activeAllocations,
+      completedTrips,
+      vehicles,
+      drivers,
+      activeTrips,
+      openMaintenance,
+      openFuelAlerts,
+      recent,
+      queue,
+    ] = await Promise.all([
       this.prisma.vehicleRequest.count(),
       this.prisma.vehicleRequest.count({ where: { status: 'PENDING_APPROVAL' } }),
       this.prisma.vehicleRequest.count({ where: { status: { in: ['APPROVED', 'ALLOCATED'] } } }),
       this.prisma.user.count({ where: { status: 'ACTIVE' } }),
       this.prisma.vehicleAllocation.count({ where: { status: { in: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] }, requestId: { not: null } } }),
       this.prisma.trip.count({ where: { status: 'COMPLETED', requestId: { not: null } } }),
+      this.prisma.vehicle.count(),
+      this.prisma.driver.count(),
+      this.prisma.trip.count({ where: { status: 'IN_PROGRESS', requestId: { not: null } } }),
+      this.prisma.maintenanceRequest.count({ where: { status: 'PENDING_REVIEW' } }),
+      this.prisma.fuelAlert.count({ where: { status: 'OPEN' } }),
       this.prisma.vehicleRequest.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
       this.prisma.vehicleRequest.findMany({ where: { status: 'PENDING_APPROVAL' }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, requestNumber: true, staffName: true, destination: true, createdAt: true } }),
     ]);
     const activity = activitySeries(days, since, recent.map((item) => item.createdAt));
     return {
       role: 'ADMIN',
-      metrics: { totalRequests, pendingRequests, approvedRequests, activeUsers, activeAllocations, completedTrips },
+      metrics: {
+        totalRequests,
+        pendingRequests,
+        approvedRequests,
+        activeUsers,
+        activeAllocations,
+        completedTrips,
+        vehicles,
+        drivers,
+        activeTrips,
+        openMaintenance,
+        openFuelAlerts,
+      },
       activity,
       approvalQueue: queue,
       notifications: queue.map((item) => ({ id: item.id, title: 'Vehicle request awaiting approval', message: `${item.requestNumber} · ${item.staffName} · ${item.destination}`, createdAt: item.createdAt })),
@@ -66,11 +97,12 @@ export class DashboardService {
     if (!driver) {
       return { role: 'DRIVER', metrics: { totalAssignments: 0, completedTrips: 0, activeTrips: 0, upcomingAssignments: 0, totalDistance: 0 }, currentAssignment: null, recentTrips: [], approvalQueue: [], activity: [] };
     }
-    const [totalAssignments, completedTrips, activeTrips, upcomingAssignments, trips, currentAssignment] = await Promise.all([
+    const [totalAssignments, completedTrips, activeTrips, upcomingAssignments, openMaintenance, trips, currentAssignment] = await Promise.all([
       this.prisma.vehicleAllocation.count({ where: { driverId: driver.id, requestId: { not: null } } }),
       this.prisma.trip.count({ where: { driverId: driver.id, status: 'COMPLETED', requestId: { not: null } } }),
       this.prisma.trip.count({ where: { driverId: driver.id, status: 'IN_PROGRESS', requestId: { not: null } } }),
       this.prisma.vehicleAllocation.count({ where: { driverId: driver.id, status: { in: ['ASSIGNED', 'ACCEPTED'] }, requestId: { not: null } } }),
+      this.prisma.maintenanceRequest.count({ where: { reportedById: user.id, status: 'PENDING_REVIEW' } }),
       this.prisma.trip.findMany({
         where: { driverId: driver.id, requestId: { not: null } },
         orderBy: [{ startedAt: 'desc' }, { createdAt: 'desc' }],
@@ -86,7 +118,7 @@ export class DashboardService {
     const totalDistance = trips.reduce((sum, trip) => sum + (trip.calculatedDistance ?? 0), 0);
     return {
       role: 'DRIVER',
-      metrics: { totalAssignments, completedTrips, activeTrips, upcomingAssignments, totalDistance },
+      metrics: { totalAssignments, completedTrips, activeTrips, upcomingAssignments, openMaintenance, totalDistance },
       currentAssignment,
       recentTrips: trips,
       approvalQueue: [],

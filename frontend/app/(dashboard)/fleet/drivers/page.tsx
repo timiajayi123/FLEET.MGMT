@@ -17,15 +17,43 @@ type Driver = {
   status: string;
   passportMimeType?: string;
   location?: { id: string; name: string } | null;
-  allocations?: Array<{ vehicle: { registrationNumber: string; age?: string | null; serviceability?: string | null; vehicleType?: { id: string; name: string } | null } }>;
+  allocations?: Array<{
+    vehicle: {
+      registrationNumber: string;
+      age?: string | null;
+      serviceability?: string | null;
+      vehicleType?: { id: string; name: string } | null;
+    };
+  }>;
 };
 
 type Mode = { type: 'create'; driver?: undefined } | { type: 'edit'; driver: Driver };
 type DriverDetails = {
   driver: Driver;
-  vehicles: Array<{ id: string; registrationNumber: string; manufacturer: string; model: string; status: string; vehicleType?: { name: string } | null }>;
-  allocations: Array<{ id: string; status: string; destination?: string | null; purpose: string; startAt: string; expectedEndAt: string; vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string } }>;
-  summary: { totalTrips: number; completedTrips: number; activeTrips: number; averageSpeed: number | null; totalDistance: number };
+  vehicles: Array<{
+    id: string;
+    registrationNumber: string;
+    manufacturer: string;
+    model: string;
+    status: string;
+    vehicleType?: { name: string } | null;
+  }>;
+  allocations: Array<{
+    id: string;
+    status: string;
+    destination?: string | null;
+    purpose: string;
+    startAt: string;
+    expectedEndAt: string;
+    vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string };
+  }>;
+  summary: {
+    totalTrips: number;
+    completedTrips: number;
+    activeTrips: number;
+    averageSpeed: number | null;
+    totalDistance: number;
+  };
 };
 
 export default function DriversPage() {
@@ -35,10 +63,10 @@ export default function DriversPage() {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
-  const [vehicleTypeFilter, setVehicleTypeFilter] = useState('');
-  const [ageFilter, setAgeFilter] = useState('');
-  const [serviceFilter, setServiceFilter] = useState('');
-  const load = () => fetch('/api/drivers').then((r) => r.json()).then((p) => setItems(p.data || []));
+  const load = () =>
+    fetch('/api/drivers')
+      .then((r) => r.json())
+      .then((p) => setItems(p.data || []));
 
   useEffect(() => {
     void load();
@@ -46,31 +74,45 @@ export default function DriversPage() {
 
   const sortedItems = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return items.filter((driver) => {
-      const vehicle = driver.allocations?.[0]?.vehicle;
-      if (locationFilter && driver.location?.id !== locationFilter && driver.locationText !== locationFilter) return false;
-      if (vehicleTypeFilter && vehicle?.vehicleType?.id !== vehicleTypeFilter) return false;
-      if (ageFilter && vehicle?.age !== ageFilter) return false;
-      if (serviceFilter && vehicle?.serviceability !== serviceFilter) return false;
-      return !search || [driver.staffName, driver.employeeId, driver.phone, driver.location?.name, driver.locationText, vehicle?.registrationNumber, vehicle?.vehicleType?.name].filter(Boolean).some((value) => String(value).toLowerCase().includes(search));
-    }).sort(compareDriversBySerialNumber);
-  }, [ageFilter, items, locationFilter, query, serviceFilter, vehicleTypeFilter]);
+    return items
+      .filter((driver) => {
+        if (
+          locationFilter &&
+          driver.location?.id !== locationFilter &&
+          driver.locationText !== locationFilter
+        )
+          return false;
+        return (
+          !search ||
+          [
+            driver.staffName,
+            driver.employeeId,
+            driver.email,
+            driver.phone,
+            driver.location?.name,
+            driver.locationText,
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(search))
+        );
+      })
+      .sort(compareDriversBySerialNumber);
+  }, [items, locationFilter, query]);
 
   function exportDrivers() {
-    downloadCsv('drivers.csv', sortedItems.map((driver) => {
-      const vehicle = driver.allocations?.[0]?.vehicle;
-      return {
-        Driver: driver.staffName,
-        'Employee ID': driver.employeeId,
-        Location: driver.location?.name || driver.locationText || '',
-        'Current vehicle': vehicle?.registrationNumber || '',
-        'Vehicle type': vehicle?.vehicleType?.name || '',
-        'Vehicle age': vehicle?.age || '',
-        'Current service': vehicle?.serviceability || '',
-        Phone: driver.phone,
-        Status: driver.status.replaceAll('_', ' '),
-      };
-    }));
+    downloadCsv(
+      'drivers.csv',
+      sortedItems.map((driver) => {
+        return {
+          Driver: driver.staffName,
+          'Employee ID': driver.employeeId,
+          Location: driver.location?.name || driver.locationText || '',
+          Email: driver.email || '',
+          Phone: driver.phone,
+          Status: driver.status.replaceAll('_', ' '),
+        };
+      }),
+    );
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -146,7 +188,11 @@ export default function DriversPage() {
     const response = await fetch(`/api/drivers/${driver.id}/details`);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || 'Unable to load driver details.');
+      setError(
+        Array.isArray(payload.message)
+          ? payload.message.join(' ')
+          : payload.message || 'Unable to load driver details.',
+      );
       return;
     }
     setDetails(payload.data);
@@ -157,17 +203,46 @@ export default function DriversPage() {
       <PageHeader
         title="Drivers"
         description="Manage the approved driver register."
-        actions={<><button className="secondary-action" onClick={exportDrivers}><Download size={16}/> Export CSV</button><button className="primary-action" onClick={() => setMode({ type: 'create' })}>Add driver</button></>}
+        actions={
+          <>
+            <button className="secondary-action" onClick={exportDrivers}>
+              <Download size={16} /> Export CSV
+            </button>
+            <button className="primary-action" onClick={() => setMode({ type: 'create' })}>
+              Add driver
+            </button>
+          </>
+        }
       />
       {error && <div className="master-alert">{error}</div>}
       <section className="master-panel">
         <div className="master-toolbar">
-          <label><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search driver, ID, vehicle or location"/></label>
+          <label>
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search driver, ID, email, phone or location"
+            />
+          </label>
           <div className="master-filters">
-            <select aria-label="Filter drivers by location" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}><option value="">All locations</option>{uniqueOptions(items.map((item) => ({ id: item.location?.id || item.locationText || '', name: item.location?.name || item.locationText || '' }))).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
-            <select aria-label="Filter drivers by vehicle type" value={vehicleTypeFilter} onChange={(event) => setVehicleTypeFilter(event.target.value)}><option value="">All vehicle types</option>{uniqueOptions(items.map((item) => item.allocations?.[0]?.vehicle.vehicleType)).map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>
-            <select aria-label="Filter drivers by vehicle age" value={ageFilter} onChange={(event) => setAgeFilter(event.target.value)}><option value="">All vehicle ages</option>{unique(items.map((item) => item.allocations?.[0]?.vehicle.age)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
-            <select aria-label="Filter drivers by current service" value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value)}><option value="">All service conditions</option>{unique(items.map((item) => item.allocations?.[0]?.vehicle.serviceability)).map((value) => <option key={value} value={value}>{value}</option>)}</select>
+            <select
+              aria-label="Filter drivers by location"
+              value={locationFilter}
+              onChange={(event) => setLocationFilter(event.target.value)}
+            >
+              <option value="">All locations</option>
+              {uniqueOptions(
+                items.map((item) => ({
+                  id: item.location?.id || item.locationText || '',
+                  name: item.location?.name || item.locationText || '',
+                })),
+              ).map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="master-table-wrap">
@@ -178,10 +253,7 @@ export default function DriversPage() {
                 <th>Driver&apos;s Name</th>
                 <th>Location</th>
                 <th>ID Number</th>
-                <th>Current Vehicle</th>
-                <th>Vehicle Type</th>
-                <th>Vehicle Age</th>
-                <th>Current Service</th>
+                <th>Email Address</th>
                 <th>Phone Number</th>
                 <th>Status</th>
                 <th>
@@ -191,32 +263,59 @@ export default function DriversPage() {
             </thead>
             <tbody>
               {sortedItems.map((driver) => (
-                <tr key={driver.id} className="driver-list-row" onClick={() => void viewDetails(driver)}>
+                <tr
+                  key={driver.id}
+                  className="driver-list-row"
+                  onClick={() => void viewDetails(driver)}
+                >
                   <td>{driver.serialNumber || '—'}</td>
                   <td>
                     {driver.passportMimeType && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img className="avatar" src={`/api/drivers/${driver.id}/passport`} alt="" />
                     )}
-                    <button className="driver-name-button" onClick={(event) => { event.stopPropagation(); void viewDetails(driver); }}>{driver.staffName}</button>
+                    <button
+                      className="driver-name-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void viewDetails(driver);
+                      }}
+                    >
+                      {driver.staffName}
+                    </button>
                   </td>
                   <td>{driver.locationText || '—'}</td>
                   <td>{driver.employeeId}</td>
-                  <td>{driver.allocations?.[0]?.vehicle.registrationNumber || '—'}</td>
-                  <td>{driver.allocations?.[0]?.vehicle.vehicleType?.name || '—'}</td>
-                  <td>{driver.allocations?.[0]?.vehicle.age || '—'}</td>
-                  <td>{driver.allocations?.[0]?.vehicle.serviceability || '—'}</td>
+                  <td>{driver.email || '—'}</td>
                   <td>{driver.phone}</td>
                   <td>{driver.status.replaceAll('_', ' ')}</td>
                   <td>
                     <div className="row-actions">
-                      <button aria-label={`View ${driver.staffName} details`} onClick={(event) => { event.stopPropagation(); void viewDetails(driver); }}>
+                      <button
+                        aria-label={`View ${driver.staffName} details`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void viewDetails(driver);
+                        }}
+                      >
                         <Eye size={15} />
                       </button>
-                      <button aria-label={`Edit ${driver.staffName}`} onClick={(event) => { event.stopPropagation(); setMode({ type: 'edit', driver }); }}>
+                      <button
+                        aria-label={`Edit ${driver.staffName}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setMode({ type: 'edit', driver });
+                        }}
+                      >
                         <Pencil size={15} />
                       </button>
-                      <button aria-label={`Delete ${driver.staffName}`} onClick={(event) => { event.stopPropagation(); void remove(driver); }}>
+                      <button
+                        aria-label={`Delete ${driver.staffName}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void remove(driver);
+                        }}
+                      >
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -247,21 +346,113 @@ export default function DriversPage() {
 
 function DriverDetailsModal({ details, onClose }: { details: DriverDetails; onClose: () => void }) {
   const { driver, vehicles, allocations, summary } = details;
-  return <div className="master-modal-backdrop"><section className="master-modal wide-modal driver-details-modal" role="dialog" aria-modal="true">
-    <header><div><span>Driver profile</span><h2>{driver.staffName}</h2><p>{driver.employeeId} · {driver.category || 'Driver'}</p></div><button onClick={onClose} aria-label="Close driver details">x</button></header>
-    <div className="driver-detail-stats">
-      <div><Route size={18} /><span>Total trips</span><strong>{summary.totalTrips}</strong></div>
-      <div><CarFront size={18} /><span>Completed trips</span><strong>{summary.completedTrips}</strong></div>
-      <div><Route size={18} /><span>Active trips</span><strong>{summary.activeTrips}</strong></div>
-      <div><Gauge size={18} /><span>Average speed</span><strong>{summary.averageSpeed == null ? '—' : `${Math.round(summary.averageSpeed)} km/h`}</strong></div>
-      <div><Route size={18} /><span>Distance recorded</span><strong>{summary.totalDistance.toFixed(1)} km</strong></div>
+  return (
+    <div className="master-modal-backdrop">
+      <section
+        className="master-modal wide-modal driver-details-modal"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header>
+          <div>
+            <span>Driver profile</span>
+            <h2>{driver.staffName}</h2>
+            <p>
+              {driver.employeeId} · {driver.category || 'Driver'} ·{' '}
+              {driver.email || 'No email address'}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Close driver details">
+            x
+          </button>
+        </header>
+        <div className="driver-detail-stats">
+          <div>
+            <Route size={18} />
+            <span>Total trips</span>
+            <strong>{summary.totalTrips}</strong>
+          </div>
+          <div>
+            <CarFront size={18} />
+            <span>Completed trips</span>
+            <strong>{summary.completedTrips}</strong>
+          </div>
+          <div>
+            <Route size={18} />
+            <span>Active trips</span>
+            <strong>{summary.activeTrips}</strong>
+          </div>
+          <div>
+            <Gauge size={18} />
+            <span>Average speed</span>
+            <strong>
+              {summary.averageSpeed == null ? '—' : `${Math.round(summary.averageSpeed)} km/h`}
+            </strong>
+          </div>
+          <div>
+            <Route size={18} />
+            <span>Distance recorded</span>
+            <strong>{summary.totalDistance.toFixed(2)} km</strong>
+          </div>
+        </div>
+        <div className="driver-detail-content">
+          <section className="driver-detail-section">
+            <h3>Previously assigned vehicles</h3>
+            {vehicles.length ? (
+              <div className="driver-vehicle-list">
+                {vehicles.map((vehicle) => (
+                  <div key={vehicle.id}>
+                    <CarFront size={18} />
+                    <span>
+                      <strong>{vehicle.registrationNumber}</strong>
+                      <small>
+                        {vehicle.manufacturer} {vehicle.model}
+                        {vehicle.vehicleType?.name ? ` · ${vehicle.vehicleType.name}` : ''}
+                      </small>
+                    </span>
+                    <em>{vehicle.status.replaceAll('_', ' ')}</em>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>No vehicle allocations recorded for this driver.</p>
+            )}
+          </section>
+          <section className="driver-detail-section">
+            <h3>Assignment history</h3>
+            {allocations.length ? (
+              <div className="driver-assignment-list">
+                {allocations.map((allocation) => (
+                  <div key={allocation.id}>
+                    <CarFront size={16} />
+                    <span>
+                      <strong>
+                        {allocation.vehicle.registrationNumber} · {allocation.vehicle.manufacturer}{' '}
+                        {allocation.vehicle.model}
+                      </strong>
+                      <small>
+                        {new Date(allocation.startAt).toLocaleDateString()} –{' '}
+                        {new Date(allocation.expectedEndAt).toLocaleDateString()} ·{' '}
+                        {allocation.destination || allocation.purpose}
+                      </small>
+                    </span>
+                    <em>{allocation.status.replaceAll('_', ' ')}</em>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>No assignment history recorded for this driver.</p>
+            )}
+          </section>
+        </div>
+        <footer>
+          <button className="primary-action" onClick={onClose}>
+            Close
+          </button>
+        </footer>
+      </section>
     </div>
-    <div className="driver-detail-content">
-      <section className="driver-detail-section"><h3>Previously assigned vehicles</h3>{vehicles.length ? <div className="driver-vehicle-list">{vehicles.map((vehicle) => <div key={vehicle.id}><CarFront size={18} /><span><strong>{vehicle.registrationNumber}</strong><small>{vehicle.manufacturer} {vehicle.model}{vehicle.vehicleType?.name ? ` · ${vehicle.vehicleType.name}` : ''}</small></span><em>{vehicle.status.replaceAll('_', ' ')}</em></div>)}</div> : <p>No vehicle allocations recorded for this driver.</p>}</section>
-      <section className="driver-detail-section"><h3>Assignment history</h3>{allocations.length ? <div className="driver-assignment-list">{allocations.map((allocation) => <div key={allocation.id}><CarFront size={16} /><span><strong>{allocation.vehicle.registrationNumber} · {allocation.vehicle.manufacturer} {allocation.vehicle.model}</strong><small>{new Date(allocation.startAt).toLocaleDateString()} – {new Date(allocation.expectedEndAt).toLocaleDateString()} · {allocation.destination || allocation.purpose}</small></span><em>{allocation.status.replaceAll('_', ' ')}</em></div>)}</div> : <p>No assignment history recorded for this driver.</p>}</section>
-    </div>
-    <footer><button className="primary-action" onClick={onClose}>Close</button></footer>
-  </section></div>;
+  );
 }
 
 function DriverModal({
@@ -288,7 +479,12 @@ function DriverModal({
           <div className="master-form-grid">
             <Field name="serialNumber" label="S/N" value={driver?.serialNumber} required={false} />
             <Field name="staffName" label="Driver's Name" value={driver?.staffName} />
-            <Field name="locationText" label="Location" value={driver?.locationText} required={false} />
+            <Field
+              name="locationText"
+              label="Location"
+              value={driver?.locationText}
+              required={false}
+            />
             <Field name="zone" label="Zone" value={driver?.zone} required={false} />
             <label className="master-field">
               <span>Category</span>
@@ -313,7 +509,9 @@ function DriverModal({
             <label className="master-field full">
               <span>Passport photograph</span>
               <input name="passport" type="file" accept="image/jpeg,image/png,image/webp" />
-              {driver?.passportMimeType && <small>Leave empty to keep the current photograph.</small>}
+              {driver?.passportMimeType && (
+                <small>Leave empty to keep the current photograph.</small>
+              )}
             </label>
           </div>
           <footer>
@@ -352,8 +550,10 @@ function Field({
 function compareDriversBySerialNumber(a: Driver, b: Driver) {
   const aSerial = normaliseSerial(a.serialNumber);
   const bSerial = normaliseSerial(b.serialNumber);
-  if (aSerial.numeric != null && bSerial.numeric != null && aSerial.numeric !== bSerial.numeric) return aSerial.numeric - bSerial.numeric;
-  if (aSerial.text !== bSerial.text) return aSerial.text.localeCompare(bSerial.text, undefined, { numeric: true });
+  if (aSerial.numeric != null && bSerial.numeric != null && aSerial.numeric !== bSerial.numeric)
+    return aSerial.numeric - bSerial.numeric;
+  if (aSerial.text !== bSerial.text)
+    return aSerial.text.localeCompare(bSerial.text, undefined, { numeric: true });
   return a.staffName.localeCompare(b.staffName);
 }
 
@@ -363,19 +563,24 @@ function normaliseSerial(value?: string | null) {
   return { text: text || '999999999', numeric: Number.isFinite(numeric) && text ? numeric : null };
 }
 
-function unique(values: Array<string | null | undefined>) {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
-}
-
 function uniqueOptions(values: Array<{ id: string; name: string } | null | undefined>) {
-  return [...new Map(values.filter((value): value is { id: string; name: string } => Boolean(value?.id && value.name)).map((value) => [value.id, value])).values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [
+    ...new Map(
+      values
+        .filter((value): value is { id: string; name: string } => Boolean(value?.id && value.name))
+        .map((value) => [value.id, value]),
+    ).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function downloadCsv(fileName: string, rows: Record<string, string>[]) {
   if (!rows.length) return;
   const columns = Object.keys(rows[0]);
   const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const csv = [columns.map(escape).join(','), ...rows.map((row) => columns.map((column) => escape(row[column] ?? '')).join(','))].join('\r\n');
+  const csv = [
+    columns.map(escape).join(','),
+    ...rows.map((row) => columns.map((column) => escape(row[column] ?? '')).join(',')),
+  ].join('\r\n');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   link.download = fileName;

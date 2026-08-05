@@ -40,7 +40,7 @@ export default function NewVehicleRequestPage() {
   return (
     <>
       <PageHeader
-        title="New Vehicle Request"
+        title="Operational Vehicle Request"
         description="Submit an official transport request for admin review and approval."
       />
       <VehicleRequestForm embedded />

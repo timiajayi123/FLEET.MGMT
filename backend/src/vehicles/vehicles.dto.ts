@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayNotEmpty, IsArray, IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { VehicleStatus } from '../common/status.constants';
 
 const empty = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
@@ -32,6 +32,9 @@ export class SaveVehicleDto {
   @IsOptional() @IsEnum(VehicleStatus) status?: VehicleStatus;
   @Transform(empty) @IsOptional() @IsUUID() locationId?: string;
   @Transform(empty) @IsOptional() @IsUUID() vehicleTypeId?: string;
+  @Transform(optionalNumber) @IsOptional() @IsNumber() @Min(1) @Max(200) customSpeedLimit?: number;
+  @Transform(optionalNumber) @IsOptional() @IsNumber() @Min(0) previousOdometer?: number;
+  @Transform(optionalNumber) @IsOptional() @IsNumber() @Min(0) currentOdometer?: number;
 }
 
 export class BulkDeleteVehiclesDto {

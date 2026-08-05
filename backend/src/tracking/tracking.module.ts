@@ -4,6 +4,7 @@ import { FleetGateway } from './fleet.gateway';
 import { TrackingController } from './tracking.controller';
 import { TrackingService } from './tracking.service';
 import { TripsService } from './trips.service';
+import { SpeedModule } from '../speed/speed.module';
 
-@Module({ imports: [AuthModule], controllers: [TrackingController], providers: [FleetGateway, TrackingService, TripsService], exports: [TrackingService, TripsService] })
+@Module({ imports: [AuthModule, SpeedModule], controllers: [TrackingController], providers: [FleetGateway, TrackingService, TripsService], exports: [TrackingService, TripsService, FleetGateway] })
 export class TrackingModule {}

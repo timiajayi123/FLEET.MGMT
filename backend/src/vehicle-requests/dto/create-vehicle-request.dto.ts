@@ -60,10 +60,10 @@ export class CreateVehicleRequestDto {
   customDepartment?: string;
 
   @Transform(trim)
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Length(2, 200)
-  customUnit!: string;
+  customUnit?: string;
 
   @Transform(trim)
   @IsString()
@@ -103,8 +103,9 @@ export class CreateVehicleRequestDto {
   priority!: RequestPriority;
 
   @Transform(trim)
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @Length(2, 2000)
   @MaxLength(2000)
-  remarks?: string;
+  remarks!: string;
 }

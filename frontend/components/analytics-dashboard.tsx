@@ -2,12 +2,35 @@
 
 import { PageHeader } from './page-header';
 import { useEffect, useMemo, useState } from 'react';
-import { CarFront, ClipboardList, Gauge, Route, Users, type LucideIcon } from 'lucide-react';
+import {
+  CarFront,
+  ClipboardList,
+  Gauge,
+  LoaderCircle,
+  Route,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 
 type Row = { label: string; value: number };
 type ChartPoint = Row & { x: number; y: number };
-type Dashboard = { metrics: Record<string, number | null>; activity: { date: string; value: number }[]; driverActivity: { date: string; value: number }[]; distanceActivity: { date: string; value: number }[]; requestStatus: Row[]; tripPurpose: Row[]; requestsByDepartment: Row[]; mostUsedVehicles: Row[]; mostActiveDrivers: Row[] };
-type SpeedData = { threshold: number; trend: { recordedAt: string; speed: number }[]; violations: unknown[] };
+type Dashboard = {
+  metrics: Record<string, number | null>;
+  activity: { date: string; value: number }[];
+  driverActivity: { date: string; value: number }[];
+  distanceActivity: { date: string; value: number }[];
+  tripDistances: { recordedAt: string; distance: number; driver?: string; vehicle?: string }[];
+  requestStatus: Row[];
+  tripPurpose: Row[];
+  requestsByDepartment: Row[];
+  mostUsedVehicles: Row[];
+  mostActiveDrivers: Row[];
+};
+type SpeedData = {
+  threshold: number;
+  trend: { recordedAt: string; speed: number; driver?: string; vehicle?: string }[];
+  violations: unknown[];
+};
 
 export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -15,6 +38,8 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('30');
+  const [speedEntity, setSpeedEntity] = useState('');
+  const [distanceEntity, setDistanceEntity] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -29,12 +54,19 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
       .then(async ([dashboardResponse, speedResponse]) => {
         const dashboardBody = await dashboardResponse.json();
         const speedBody = await speedResponse.json();
-        if (!dashboardResponse.ok) throw new Error(dashboardBody.message || 'Unable to load analytics.');
-        if (!speedResponse.ok) throw new Error(speedBody.message || 'Unable to load speed analytics.');
+        if (!dashboardResponse.ok)
+          throw new Error(dashboardBody.message || 'Unable to load analytics.');
+        if (!speedResponse.ok)
+          throw new Error(speedBody.message || 'Unable to load speed analytics.');
         return [dashboardBody as Dashboard, speedBody as SpeedData] as const;
       })
-      .then(([dashboard, speedData]) => { setData(dashboard); setSpeed(speedData); })
-      .catch((reason) => { if (reason.name !== 'AbortError') setError(reason.message); })
+      .then(([dashboard, speedData]) => {
+        setData(dashboard);
+        setSpeed(speedData);
+      })
+      .catch((reason) => {
+        if (reason.name !== 'AbortError') setError(reason.message);
+      })
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [range]);
@@ -46,95 +78,564 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
     { label: 'Requests', value: metrics.requests, icon: ClipboardList },
     { label: 'Completed trips', value: metrics.completedTrips, icon: Route },
     { label: 'Active drivers', value: metrics.activeDrivers, icon: Users },
-    { label: 'Distance', value: metrics.distanceTravelled === null || metrics.distanceTravelled === undefined ? '—' : `${Number(metrics.distanceTravelled).toFixed(1)} km`, icon: Gauge },
+    {
+      label: 'Distance',
+      value:
+        metrics.distanceTravelled === null || metrics.distanceTravelled === undefined
+          ? '—'
+          : `${Number(metrics.distanceTravelled).toFixed(1)} km`,
+      icon: Gauge,
+    },
   ];
-  const speedRows = (speed?.trend ?? []).slice(-80).map((row) => ({ label: row.recordedAt, value: row.speed }));
-  const filters = <select value={range} onChange={(event) => setRange(event.target.value)} aria-label="Analytics date range"><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">This year</option></select>;
+  const speedOptions = individualOptions(speed?.trend ?? []);
+  const activeSpeedEntity = speedEntity || speedOptions[0]?.value || '';
+  const speedRows = (speed?.trend ?? [])
+    .filter((row) => individualKey(row) === activeSpeedEntity)
+    .slice(-80)
+    .map((row) => ({ label: row.recordedAt, value: row.speed }));
+  const distanceOptions = individualOptions(data?.tripDistances ?? []);
+  const activeDistanceEntity = distanceEntity || distanceOptions[0]?.value || '';
+  const distanceRows = (data?.tripDistances ?? [])
+    .filter((row) => individualKey(row) === activeDistanceEntity)
+    .sort((first, second) => first.recordedAt.localeCompare(second.recordedAt))
+    .map((row) => ({ label: row.recordedAt, value: row.distance }));
+  const filters = (
+    <select
+      value={range}
+      onChange={(event) => setRange(event.target.value)}
+      aria-label="Analytics date range"
+    >
+      <option value="7">Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+      <option value="365">This year</option>
+    </select>
+  );
   const activityRows = data ? combineActivityRows(data.activity, data.driverActivity) : [];
 
-  return <section className={embedded ? 'dashboard-analytics-embedded' : undefined}>
-    {!embedded && <PageHeader title="Dashboard Analytics" description="Live fleet metrics, trips, vehicle requests and operational trends." actions={filters} />}
-    {embedded && <div className="analytics-embedded-heading"><div><h2>Fleet analytics</h2><p>Live request, trip, distance and safety trends.</p></div>{filters}</div>}
-    {error && <div className="master-alert">{error}</div>}
-    {loading ? <section className="panel"><p>Loading live analytics…</p></section> : !data ? <section className="panel"><p>Analytics could not be loaded.</p></section> : <>
-      <section className="analytics-primary-layout">
-        <FleetActivityTimeline rows={activityRows} range={range} />
-        <section className="panel fleet-analytics-side"><div className="panel-heading"><div><h2>Fleet analytics</h2><p>Current operational totals.</p></div></div><section className="metric-grid fleet-analytics-metrics">{cards.map(({ label, value, icon: Icon }) => <article className="metric-card" key={label}><div className="metric-icon blue"><Icon size={20} /></div><div><p>{label}</p><strong>{value ?? 0}</strong><small>Recorded in fleet data</small></div></article>)}</section></section>
-      </section>
-      <section className="analytics-chart-grid">
-        <LineChart title="Speed and overspeed trend" description={`${speed?.violations.length ?? 0} GPS point(s) exceeded the red 100 km/h guide line. Hover across the chart for a reading.`} rows={speedRows} icon={Gauge} tone="red" threshold={speed?.threshold ?? 100} unit="km/h" />
-        <LineChart title="Trip distance trend" description="Distance recorded for completed journeys. Hover across the chart to inspect each trip date." rows={data.distanceActivity.map((row) => ({ label: row.date, value: row.value }))} icon={Route} tone="gold" unit="km" />
-      </section>
-      <section className="dashboard-grid"><Breakdown title="Request status" rows={data.requestStatus} /><Breakdown title="Trip purpose" rows={data.tripPurpose} /><Breakdown title="Requests by department" rows={data.requestsByDepartment} /><Breakdown title="Most-used vehicles" rows={data.mostUsedVehicles} /><Breakdown title="Most-active drivers" rows={data.mostActiveDrivers} /></section>
-    </>}
-  </section>;
+  return (
+    <section className={embedded ? 'dashboard-analytics-embedded' : undefined}>
+      {!embedded && (
+        <PageHeader
+          title="Dashboard Analytics"
+          description="Live fleet metrics, trips, vehicle requests and operational trends."
+          actions={filters}
+        />
+      )}
+      {embedded && (
+        <div className="analytics-embedded-heading">
+          <div>
+            <h2>Fleet analytics</h2>
+            <p>Live request, trip, distance and safety trends.</p>
+          </div>
+          {filters}
+        </div>
+      )}
+      {error && <div className="master-alert">{error}</div>}
+      {loading ? (
+        <AnalyticsLoading />
+      ) : !data ? (
+        <section className="panel">
+          <p>Analytics could not be loaded.</p>
+        </section>
+      ) : (
+        <>
+          <section className="analytics-primary-layout">
+            <FleetActivityTimeline rows={activityRows} range={range} />
+            <section className="panel fleet-analytics-side">
+              <div className="panel-heading">
+                <div>
+                  <h2>Fleet analytics</h2>
+                  <p>Current operational totals.</p>
+                </div>
+              </div>
+              <section className="metric-grid fleet-analytics-metrics">
+                {cards.map(({ label, value, icon: Icon }) => (
+                  <article className="metric-card" key={label}>
+                    <div className="metric-icon blue">
+                      <Icon size={20} />
+                    </div>
+                    <div>
+                      <p>{label}</p>
+                      <strong>{value ?? 0}</strong>
+                      <small>Recorded in fleet data</small>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            </section>
+          </section>
+          <section className="analytics-chart-grid">
+            <LineChart
+              title="Speed and overspeed trend"
+              description="Individual GPS speed readings with the overspeed threshold clearly marked."
+              rows={speedRows}
+              icon={Gauge}
+              tone="red"
+              threshold={speed?.threshold ?? 100}
+              unit="km/h"
+              selector={
+                <IndividualSelector
+                  label="Driver and vehicle"
+                  value={activeSpeedEntity}
+                  options={speedOptions}
+                  onChange={setSpeedEntity}
+                />
+              }
+            />
+            <LineChart
+              title="Trip distance trend"
+              description="Completed journey distances for one driver and vehicle at a time."
+              rows={distanceRows}
+              icon={Route}
+              tone="gold"
+              unit="km"
+              selector={
+                <IndividualSelector
+                  label="Driver and vehicle"
+                  value={activeDistanceEntity}
+                  options={distanceOptions}
+                  onChange={setDistanceEntity}
+                />
+              }
+            />
+          </section>
+          <section className="dashboard-grid">
+            <Breakdown title="Request status" rows={data.requestStatus} />
+            <Breakdown title="Trip purpose" rows={data.tripPurpose} />
+            <Breakdown title="Requests by department" rows={data.requestsByDepartment} />
+            <Breakdown title="Most-used vehicles" rows={data.mostUsedVehicles} />
+          </section>
+        </>
+      )}
+    </section>
+  );
+}
+
+function AnalyticsLoading() {
+  return (
+    <section className="analytics-loading" role="status" aria-live="polite" aria-busy="true">
+      <div className="analytics-loading-message">
+        <LoaderCircle size={25} />
+        <span>
+          <strong>Loading fleet analytics</strong>
+          <small>Preparing request, trip, distance and safety graphs…</small>
+        </span>
+      </div>
+      <div className="analytics-loading-primary">
+        <article className="analytics-chart-skeleton large">
+          <span className="skeleton-heading" />
+          <span className="skeleton-subheading" />
+          <div className="skeleton-graph-line">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+        </article>
+        <article className="analytics-metric-skeleton">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span key={index}>
+              <i />
+              <b />
+            </span>
+          ))}
+        </article>
+      </div>
+      <div className="analytics-loading-charts">
+        {[0, 1].map((chart) => (
+          <article className="analytics-chart-skeleton" key={chart}>
+            <span className="skeleton-heading" />
+            <span className="skeleton-subheading" />
+            <div className="skeleton-graph-line">
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function FleetActivityTimeline({ rows, range }: { rows: Row[]; range: string }) {
   const chart = useMemo(() => timelinePoints(rows), [rows]);
   const [selected, setSelected] = useState<ChartPoint | null>(null);
   const rangeLabel = range === '365' ? 'this year' : `the last ${range} days`;
-  return <article className="panel line-chart-panel fleet-activity-timeline">
-    <div className="panel-heading"><div><h2>Fleet Activity Timeline</h2><p>Combined vehicle requests and request-backed driver trips over {rangeLabel}.</p></div><ClipboardList size={20} /></div>
-    {rows.length ? <>
-      <div className="line-chart-summary"><strong>{chart.latest}</strong><span>Latest activity</span></div>
-      <svg className="activity-timeline-chart" viewBox="0 0 1000 350" role="img" aria-label={`Fleet activity timeline: latest ${chart.latest}, peak ${chart.max}`} preserveAspectRatio="none" onMouseMove={(event) => setSelected(nearestPoint(chart.points, event.clientX - event.currentTarget.getBoundingClientRect().left, event.currentTarget.getBoundingClientRect().width))} onMouseLeave={() => setSelected(null)}>
-        {chart.ticks.map((tick) => <g key={tick.value}><line className="activity-timeline-grid" x1="58" y1={tick.y} x2="978" y2={tick.y} /><text className="activity-timeline-y-label" x="48" y={tick.y + 4} textAnchor="end">{tick.value}</text></g>)}
-        {chart.verticalGrid.map((x) => <line className="activity-timeline-grid" key={x} x1={x} y1="24" x2={x} y2="286" />)}
-        {chart.points.map((point, index) => (index % chart.labelEvery === 0 || index === chart.points.length - 1) && <text className="activity-timeline-x-label" key={`${point.label}-label`} x={point.x} y="329" textAnchor="middle">{shortDate(point.label)}</text>)}
-        <text className="chart-axis-title" x="518" y="346" textAnchor="middle">Date</text>
-        <text className="chart-axis-title" transform="translate(15 156) rotate(-90)" textAnchor="middle">Number of fleet activities</text>
-        <path className="activity-timeline-area" d={`${chart.areaPath} L978 286 L58 286 Z`} />
-        <path className="activity-timeline-line" d={chart.smoothPath} />
-        {chart.points.map((point) => <circle className="activity-timeline-node" key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="4.5" tabIndex={0} onMouseEnter={() => setSelected(point)} onFocus={() => setSelected(point)} aria-label={`${shortDate(point.label)}: ${point.value} fleet activities`}><title>{`${shortDate(point.label)}: ${point.value} fleet activities`}</title></circle>)}
-        {selected && <ChartTooltip point={selected} chartWidth={1000} unit="activities" />}
-      </svg>
-    </> : <p className="empty-compact">No fleet activity exists for this period.</p>}
-  </article>;
+  return (
+    <article className="panel line-chart-panel fleet-activity-timeline">
+      <div className="panel-heading">
+        <div>
+          <h2>Fleet Activity Timeline</h2>
+          <p>Combined vehicle requests and request-backed driver trips over {rangeLabel}.</p>
+        </div>
+        <ClipboardList size={20} />
+      </div>
+      {rows.length ? (
+        <>
+          <div className="line-chart-summary">
+            <strong>{chart.latest}</strong>
+            <span>Latest activity</span>
+          </div>
+          <svg
+            className="activity-timeline-chart"
+            viewBox="0 0 1000 350"
+            role="img"
+            aria-label={`Fleet activity timeline: latest ${chart.latest}, peak ${chart.max}`}
+            preserveAspectRatio="none"
+            onMouseMove={(event) =>
+              setSelected(
+                nearestPoint(
+                  chart.points,
+                  event.clientX - event.currentTarget.getBoundingClientRect().left,
+                  event.currentTarget.getBoundingClientRect().width,
+                ),
+              )
+            }
+            onMouseLeave={() => setSelected(null)}
+          >
+            {chart.ticks.map((tick) => (
+              <g key={tick.value}>
+                <line className="activity-timeline-grid" x1="58" y1={tick.y} x2="978" y2={tick.y} />
+                <text className="activity-timeline-y-label" x="48" y={tick.y + 4} textAnchor="end">
+                  {tick.value}
+                </text>
+              </g>
+            ))}
+            {chart.verticalGrid.map((x) => (
+              <line className="activity-timeline-grid" key={x} x1={x} y1="24" x2={x} y2="286" />
+            ))}
+            {chart.points.map(
+              (point, index) =>
+                (index % chart.labelEvery === 0 || index === chart.points.length - 1) && (
+                  <text
+                    className="activity-timeline-x-label"
+                    key={`${point.label}-label`}
+                    x={point.x}
+                    y="329"
+                    textAnchor="middle"
+                  >
+                    {shortDate(point.label)}
+                  </text>
+                ),
+            )}
+            <text className="chart-axis-title" x="518" y="346" textAnchor="middle">
+              Date
+            </text>
+            <text
+              className="chart-axis-title"
+              transform="translate(15 156) rotate(-90)"
+              textAnchor="middle"
+            >
+              Number of fleet activities
+            </text>
+            <path className="activity-timeline-area" d={`${chart.areaPath} L978 286 L58 286 Z`} />
+            <path className="activity-timeline-line" d={chart.smoothPath} />
+            {chart.points.map((point) => (
+              <circle
+                className="activity-timeline-node"
+                key={`${point.x}-${point.y}`}
+                cx={point.x}
+                cy={point.y}
+                r="4.5"
+                tabIndex={0}
+                onMouseEnter={() => setSelected(point)}
+                onFocus={() => setSelected(point)}
+                aria-label={`${shortDate(point.label)}: ${point.value} fleet activities`}
+              >
+                <title>{`${shortDate(point.label)}: ${point.value} fleet activities`}</title>
+              </circle>
+            ))}
+            {selected && <ChartTooltip point={selected} chartWidth={1000} unit="activities" />}
+          </svg>
+        </>
+      ) : (
+        <p className="empty-compact">No fleet activity exists for this period.</p>
+      )}
+    </article>
+  );
 }
 
-function LineChart({ title, description, rows, icon: Icon, tone = 'green', threshold, unit = '' }: { title: string; description: string; rows: Row[]; icon: LucideIcon; tone?: 'green' | 'blue' | 'red' | 'gold'; threshold?: number; unit?: string }) {
+function LineChart({
+  title,
+  description,
+  rows,
+  icon: Icon,
+  tone = 'green',
+  threshold,
+  unit = '',
+  selector,
+}: {
+  title: string;
+  description: string;
+  rows: Row[];
+  icon: LucideIcon;
+  tone?: 'green' | 'blue' | 'red' | 'gold';
+  threshold?: number;
+  unit?: string;
+  selector?: React.ReactNode;
+}) {
   const chart = useMemo(() => chartPoints(rows, threshold), [rows, threshold]);
   const yAxisLabel = unit === 'km/h' ? 'Speed (km/h)' : unit === 'km' ? 'Distance (km)' : 'Value';
   const [selected, setSelected] = useState<ChartPoint | null>(null);
-  return <article className={`panel line-chart-panel ${tone}`}><div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><Icon size={19} /></div>{rows.length ? <><div className="line-chart-summary"><strong>{chart.latest}{unit && ` ${unit}`}</strong><span>Latest reading</span></div><svg className="line-chart" viewBox="0 0 600 190" role="img" aria-label={`${title}: latest ${chart.latest}${unit}`} preserveAspectRatio="none" onMouseMove={(event) => setSelected(nearestPoint(chart.points, event.clientX - event.currentTarget.getBoundingClientRect().left, event.currentTarget.getBoundingClientRect().width))} onMouseLeave={() => setSelected(null)}><path className="line-chart-grid" d="M42 28H584M42 74H584M42 120H584M42 166H584M42 28V166M150 28V166M258 28V166M366 28V166M474 28V166M584 28V166" />{chart.ticks.map((tick) => <text className="line-chart-y-label" key={tick.value} x="35" y={tick.y + 4} textAnchor="end">{tick.value}{unit && ` ${unit}`}</text>)}<text className="chart-axis-title" x="313" y="188" textAnchor="middle">Date</text><text className="chart-axis-title" transform="translate(11 97) rotate(-90)" textAnchor="middle">{yAxisLabel}</text>{threshold !== undefined && <><path className="line-chart-threshold" d={`M42 ${chart.y(threshold)}H584`} /><text x="580" y={chart.y(threshold) - 5} textAnchor="end">{threshold} {unit}</text></>}<path className="line-chart-area" d={`${chart.path} L584 166 L42 166 Z`} /><path className="line-chart-line" d={chart.path} />{chart.points.map((point) => <circle className="line-chart-node" key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="4" tabIndex={0} onMouseEnter={() => setSelected(point)} onFocus={() => setSelected(point)} aria-label={`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}><title>{`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}</title></circle>)}{selected && <ChartTooltip point={selected} chartWidth={600} unit={unit} />}</svg><footer><span>{shortDate(rows[0].label)}</span><span>{shortDate(rows.at(-1)?.label ?? '')}</span></footer></> : <p className="empty-compact">No chart data exists for this period.</p>}</article>;
+  return (
+    <article className={`panel line-chart-panel ${tone}`}>
+      <div className="panel-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <Icon size={19} />
+      </div>
+      {selector}
+      {rows.length ? (
+        <>
+          <svg
+            className="line-chart"
+            viewBox="0 0 600 190"
+            role="img"
+            aria-label={`${title}: latest ${chart.latest}${unit}`}
+            preserveAspectRatio="none"
+            onMouseMove={(event) =>
+              setSelected(
+                nearestPoint(
+                  chart.points,
+                  event.clientX - event.currentTarget.getBoundingClientRect().left,
+                  event.currentTarget.getBoundingClientRect().width,
+                ),
+              )
+            }
+            onMouseLeave={() => setSelected(null)}
+          >
+            <path
+              className="line-chart-grid"
+              d="M66 28H584M66 74H584M66 120H584M66 166H584M66 28V166M170 28V166M274 28V166M378 28V166M482 28V166M584 28V166"
+            />
+            {chart.ticks.map((tick) => (
+              <text
+                className="line-chart-y-label"
+                key={tick.value}
+                x="57"
+                y={tick.y + 4}
+                textAnchor="end"
+              >
+                {tick.value}
+                {unit && ` ${unit}`}
+              </text>
+            ))}
+            <text className="chart-axis-title" x="313" y="188" textAnchor="middle">
+              Date
+            </text>
+            <text
+              className="chart-axis-title"
+              transform="translate(11 97) rotate(-90)"
+              textAnchor="middle"
+            >
+              {yAxisLabel}
+            </text>
+            {threshold !== undefined && (
+              <>
+                <path className="line-chart-threshold" d={`M66 ${chart.y(threshold)}H584`} />
+                <text x="580" y={chart.y(threshold) - 5} textAnchor="end">
+                  {threshold} {unit}
+                </text>
+              </>
+            )}
+            <path className="line-chart-area" d={`${chart.path} L584 166 L66 166 Z`} />
+            <path className="line-chart-line" d={chart.path} />
+            {chart.points.map((point) => (
+              <circle
+                className="line-chart-node"
+                key={`${point.x}-${point.y}`}
+                cx={point.x}
+                cy={point.y}
+                r="4"
+                tabIndex={0}
+                onMouseEnter={() => setSelected(point)}
+                onFocus={() => setSelected(point)}
+                aria-label={`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}
+              >
+                <title>{`${shortDate(point.label)}: ${point.value}${unit ? ` ${unit}` : ''}`}</title>
+              </circle>
+            ))}
+            {selected && <ChartTooltip point={selected} chartWidth={600} unit={unit} />}
+          </svg>
+          <footer>
+            <span>{shortDate(rows[0].label)}</span>
+            <span>{shortDate(rows.at(-1)?.label ?? '')}</span>
+          </footer>
+        </>
+      ) : (
+        <p className="empty-compact">No chart data exists for this period.</p>
+      )}
+    </article>
+  );
 }
 
-function ChartTooltip({ point, chartWidth, unit }: { point: { x: number; y: number; label: string; value: number }; chartWidth: number; unit: string }) {
+function individualIdentity(row: { driver?: string; vehicle?: string }) {
+  return {
+    driver: row.driver?.trim() || 'Unassigned driver',
+    vehicle: row.vehicle?.trim() || 'Vehicle not recorded',
+  };
+}
+
+function individualKey(row: { driver?: string; vehicle?: string }) {
+  const identity = individualIdentity(row);
+  return `${identity.driver}|||${identity.vehicle}`;
+}
+
+function individualOptions(rows: { driver?: string; vehicle?: string }[]) {
+  return [...new Map(rows.map((row) => {
+    const identity = individualIdentity(row);
+    return [individualKey(row), {
+      value: individualKey(row),
+      label: `${identity.driver} — ${identity.vehicle}`,
+    }];
+  })).values()];
+}
+
+function IndividualSelector({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="analytics-individual-selector">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.length ? options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        )) : <option value="">No individual records</option>}
+      </select>
+    </label>
+  );
+}
+
+function ChartTooltip({
+  point,
+  chartWidth,
+  unit,
+}: {
+  point: { x: number; y: number; label: string; value: number };
+  chartWidth: number;
+  unit: string;
+}) {
   const width = 126;
   const x = Math.max(8, Math.min(chartWidth - width - 8, point.x + 12));
   const y = Math.max(8, point.y - 47);
-  return <g className="chart-svg-tooltip" transform={`translate(${x} ${y})`} pointerEvents="none"><rect width={width} height="38" rx="6" /><text x="9" y="15">{shortDate(point.label)}</text><text x="9" y="30">{point.value}{unit ? ` ${unit}` : ''}</text></g>;
+  return (
+    <g className="chart-svg-tooltip" transform={`translate(${x} ${y})`} pointerEvents="none">
+      <rect width={width} height="38" rx="6" />
+      <text x="9" y="15">
+        {shortDate(point.label)}
+      </text>
+      <text x="9" y="30">
+        {point.value}
+        {unit ? ` ${unit}` : ''}
+      </text>
+    </g>
+  );
 }
 
 function nearestPoint(points: ChartPoint[], pointerX: number, chartWidth: number) {
   const minX = points[0]?.x ?? 0;
   const maxX = points.at(-1)?.x ?? minX;
   const relativeX = minX + Math.max(0, Math.min(1, pointerX / chartWidth)) * (maxX - minX);
-  return points.reduce((nearest, point) => Math.abs(point.x - relativeX) < Math.abs(nearest.x - relativeX) ? point : nearest, points[0]);
+  return points.reduce(
+    (nearest, point) =>
+      Math.abs(point.x - relativeX) < Math.abs(nearest.x - relativeX) ? point : nearest,
+    points[0],
+  );
 }
 
-function Breakdown({ title, rows }: { title: string; rows: Row[] }) { const max = useMemo(() => Math.max(1, ...rows.map((row) => row.value)), [rows]); return <article className="panel"><div className="panel-heading"><div><h2>{title}</h2><p>Calculated from authorised fleet records.</p></div></div>{rows.length ? <div className="analytics-list">{rows.slice(0, 8).map((row) => <div key={row.label}><span>{row.label}</span><strong>{row.value}</strong><i style={{ width: `${row.value / max * 100}%` }} /></div>)}</div> : <p className="empty-compact">No data available yet.</p>}</article>; }
+function Breakdown({ title, rows }: { title: string; rows: Row[] }) {
+  const max = useMemo(() => Math.max(1, ...rows.map((row) => row.value)), [rows]);
+  return (
+    <article className="panel">
+      <div className="panel-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>Calculated from authorised fleet records.</p>
+        </div>
+      </div>
+      {rows.length ? (
+        <div className="analytics-list">
+          {rows.slice(0, 8).map((row) => (
+            <div key={row.label}>
+              <span>{row.label}</span>
+              <strong>{row.value}</strong>
+              <i style={{ width: `${(row.value / max) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-compact">No data available yet.</p>
+      )}
+    </article>
+  );
+}
 
-function combineActivityRows(requests: { date: string; value: number }[], trips: { date: string; value: number }[]): Row[] {
+function combineActivityRows(
+  requests: { date: string; value: number }[],
+  trips: { date: string; value: number }[],
+): Row[] {
   const values = new Map<string, number>();
-  for (const row of [...requests, ...trips]) values.set(row.date, (values.get(row.date) ?? 0) + row.value);
-  return [...values.entries()].sort(([first], [second]) => first.localeCompare(second)).map(([label, value]) => ({ label, value }));
+  for (const row of [...requests, ...trips])
+    values.set(row.date, (values.get(row.date) ?? 0) + row.value);
+  return [...values.entries()]
+    .sort(([first], [second]) => first.localeCompare(second))
+    .map(([label, value]) => ({ label, value }));
 }
 
 function timelinePoints(rows: Row[]) {
   const rawMax = Math.max(1, ...rows.map((row) => row.value));
   const step = Math.max(1, Math.ceil(rawMax / 5));
   const max = step * 5;
-  const minX = 58; const maxX = 978; const minY = 24; const maxY = 286;
+  const minX = 58;
+  const maxX = 978;
+  const minY = 24;
+  const maxY = 286;
   const divisor = Math.max(1, rows.length - 1);
-  const points = rows.map((row, index) => ({ x: minX + index / divisor * (maxX - minX), y: maxY - row.value / max * (maxY - minY), label: row.label, value: Math.round(row.value * 10) / 10 }));
-  const areaPath = points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
-  return { points, max, latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10, areaPath, smoothPath: smoothPath(points), ticks: Array.from({ length: 6 }, (_, index) => ({ value: index * step, y: maxY - index / 5 * (maxY - minY) })), verticalGrid: Array.from({ length: 11 }, (_, index) => minX + index / 10 * (maxX - minX)), labelEvery: Math.max(1, Math.ceil(points.length / 12)) };
+  const points = rows.map((row, index) => ({
+    x: minX + (index / divisor) * (maxX - minX),
+    y: maxY - (row.value / max) * (maxY - minY),
+    label: row.label,
+    value: Math.round(row.value * 10) / 10,
+  }));
+  const areaPath = points
+    .map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`)
+    .join(' ');
+  return {
+    points,
+    max,
+    latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10,
+    areaPath,
+    smoothPath: smoothPath(points),
+    ticks: Array.from({ length: 6 }, (_, index) => ({
+      value: index * step,
+      y: maxY - (index / 5) * (maxY - minY),
+    })),
+    verticalGrid: Array.from({ length: 11 }, (_, index) => minX + (index / 10) * (maxX - minX)),
+    labelEvery: Math.max(1, Math.ceil(points.length / 12)),
+  };
 }
 
 function smoothPath(points: { x: number; y: number }[]) {
-  if (points.length < 3) return points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
+  if (points.length < 3)
+    return points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
   return points.reduce((path, point, index) => {
     if (index === 0) return `M${point.x} ${point.y}`;
     const previous = points[index - 1];
@@ -144,5 +645,36 @@ function smoothPath(points: { x: number; y: number }[]) {
   }, '');
 }
 
-function chartPoints(rows: Row[], threshold?: number) { const rawMax = Math.max(1, threshold ?? 0, ...rows.map((row) => row.value)); const step = Math.max(1, Math.ceil(rawMax / 4)); const max = step * 4; const minX = 42; const maxX = 584; const minY = 28; const maxY = 166; const divisor = Math.max(1, rows.length - 1); const points = rows.map((row, index) => ({ x: minX + index / divisor * (maxX - minX), y: maxY - row.value / max * (maxY - minY), label: row.label, value: Math.round(row.value * 10) / 10 })); return { points, max: Math.round(max * 10) / 10, latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10, path: points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' '), y: (value: number) => maxY - Math.min(value, max) / max * (maxY - minY), ticks: Array.from({ length: 5 }, (_, index) => ({ value: index * step, y: maxY - index / 4 * (maxY - minY) })) }; }
-function shortDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date); }
+function chartPoints(rows: Row[], threshold?: number) {
+  const rawMax = Math.max(1, threshold ?? 0, ...rows.map((row) => row.value));
+  const step = Math.max(1, Math.ceil(rawMax / 4));
+  const max = step * 4;
+  const minX = 66;
+  const maxX = 584;
+  const minY = 28;
+  const maxY = 166;
+  const divisor = Math.max(1, rows.length - 1);
+  const points = rows.map((row, index) => ({
+    x: minX + (index / divisor) * (maxX - minX),
+    y: maxY - (row.value / max) * (maxY - minY),
+    label: row.label,
+    value: Math.round(row.value * 10) / 10,
+  }));
+  return {
+    points,
+    max: Math.round(max * 10) / 10,
+    latest: Math.round((rows.at(-1)?.value ?? 0) * 10) / 10,
+    path: points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' '),
+    y: (value: number) => maxY - (Math.min(value, max) / max) * (maxY - minY),
+    ticks: Array.from({ length: 5 }, (_, index) => ({
+      value: index * step,
+      y: maxY - (index / 4) * (maxY - minY),
+    })),
+  };
+}
+function shortDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date);
+}

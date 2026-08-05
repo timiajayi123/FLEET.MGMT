@@ -1,8 +1,20 @@
 import { Transform } from 'class-transformer';
-import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
-const decimal = ({ value }: { value: unknown }) => value === '' || value === undefined || value === null ? undefined : Number(value);
-const text = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
+const decimal = ({ value }: { value: unknown }) =>
+  value === '' || value === undefined || value === null ? undefined : Number(value);
+const text = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
 export class CreateFuelEntryDto {
   @IsOptional() @IsUUID() vehicleId?: string;
@@ -12,6 +24,8 @@ export class CreateFuelEntryDto {
   @IsOptional() @IsUUID() stationId?: string;
   @IsOptional() @IsUUID() fuelCardId?: string;
   @IsDateString() fuelingAt!: string;
+  @Transform(text) @IsString() @IsNotEmpty() @MaxLength(200) stationName!: string;
+  @Transform(text) @IsString() @IsNotEmpty() @MaxLength(500) stationLocation!: string;
   @Transform(text) @IsString() @IsNotEmpty() @MaxLength(40) fuelType!: string;
   @Transform(text) @IsOptional() @IsString() @MaxLength(40) entryType?: string;
   @Transform(text) @IsOptional() @IsString() @MaxLength(1000) reason?: string;
@@ -28,7 +42,7 @@ export class CreateFuelEntryDto {
   @Transform(text) @IsOptional() @IsString() @MaxLength(100) cardTransactionNumber?: string;
   @Transform(text) @IsOptional() @IsString() @MaxLength(100) receiptNumber?: string;
   @Transform(text) @IsOptional() @IsString() @MaxLength(100) vendorInvoice?: string;
-  @Transform(decimal) @IsOptional() @IsNumber() @Min(0) currentOdometer?: number;
+  @Transform(decimal) @IsNumber() @Min(0) currentOdometer!: number;
   @Transform(decimal) @IsOptional() @IsNumber() @Min(0) gpsDistance?: number;
   @Transform(decimal) @IsOptional() @IsNumber() @Min(0) engineHours?: number;
   @Transform(decimal) @IsOptional() @IsNumber() @Min(-90) @Max(90) latitude?: number;

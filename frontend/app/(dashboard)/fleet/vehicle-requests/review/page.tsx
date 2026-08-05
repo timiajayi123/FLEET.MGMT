@@ -5,7 +5,13 @@ import { apiMessage, readApiJson } from '@/lib/api-response';
 import { Eye, Search, XCircle } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
-type Vehicle = { id: string; registrationNumber: string; manufacturer: string; model: string; status: string };
+type Vehicle = {
+  id: string;
+  registrationNumber: string;
+  manufacturer: string;
+  model: string;
+  status: string;
+};
 type Driver = { id: string; staffName: string; employeeId: string; status: string };
 type VehicleRequest = {
   id: string;
@@ -15,6 +21,7 @@ type VehicleRequest = {
   location: string;
   directorate: string;
   department: string;
+  unit?: string;
   purposeOfTrip: string;
   vehicleTypeName: string;
   destination: string;
@@ -47,7 +54,7 @@ export default function ReviewRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<VehicleRequest | null>(null);
   const [approvalRequest, setApprovalRequest] = useState<VehicleRequest | null>(null);
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('PENDING_APPROVAL');
+  const [statusFilter, setStatusFilter] = useState('');
   const [error, setError] = useState('');
   const [modalError, setModalError] = useState('');
 
@@ -86,7 +93,11 @@ export default function ReviewRequestsPage() {
         request.vehicleTypeName,
         request.priority,
         request.status,
-      ].some((value) => String(value ?? '').toLowerCase().includes(search));
+      ].some((value) =>
+        String(value ?? '')
+          .toLowerCase()
+          .includes(search),
+      );
     });
   }, [query, requests, statusFilter]);
 
@@ -96,6 +107,22 @@ export default function ReviewRequestsPage() {
     const payload = await readApiJson(response, `Unable to ${action} request.`);
     if (!response.ok) {
       setError(apiMessage(payload.message, `Unable to ${action} request.`));
+      return;
+    }
+    setError('');
+    setSelectedRequest(null);
+    await load();
+  }
+
+  async function approveRequest(id: string) {
+    const response = await fetch(`/api/vehicle-requests/${id}/approve`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const payload = await readApiJson(response, 'Unable to approve request.');
+    if (!response.ok) {
+      setError(apiMessage(payload.message, 'Unable to approve request.'));
       return;
     }
     setError('');
@@ -137,7 +164,11 @@ export default function ReviewRequestsPage() {
         <div className="master-toolbar">
           <label>
             <Search size={16} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search request, staff, destination or department" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search request, staff, destination or department"
+            />
           </label>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="">All statuses</option>
@@ -149,16 +180,19 @@ export default function ReviewRequestsPage() {
           </select>
         </div>
         <div className="master-table-wrap">
-          <table className="master-table">
+          <table className="master-table review-request-table">
             <thead>
               <tr>
-                <th>Request</th>
-                <th>Staff</th>
+                <th>Request ID</th>
+                <th>Staff name</th>
+                <th>Staff ID</th>
                 <th>Destination</th>
-                <th>Trip date</th>
+                <th>Departure</th>
                 <th>Priority</th>
                 <th>Status</th>
-                <th><span className="sr-only">Actions</span></th>
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -166,24 +200,25 @@ export default function ReviewRequestsPage() {
                 <tr key={request.id}>
                   <td>
                     <strong>{request.requestNumber}</strong>
-                    <small>{new Date(request.createdAt).toLocaleString()}</small>
                   </td>
+                  <td>{request.staffName}</td>
                   <td>
-                    <strong>{request.staffName}</strong>
-                    <small>{request.employeeId}</small>
+                    <strong>{request.employeeId}</strong>
                   </td>
-                  <td>
-                    {request.destination}
-                    <small>{request.department}</small>
-                  </td>
-                  <td>
-                    {new Date(request.departureDate).toLocaleString()}
-                    <small>to {new Date(request.expectedReturnDate).toLocaleString()}</small>
-                  </td>
+                  <td>{request.destination}</td>
+                  <td className="date-cell">{new Date(request.departureDate).toLocaleString()}</td>
                   <td>{request.priority}</td>
-                  <td>{request.status.replaceAll('_', ' ')}</td>
                   <td>
-                    <button className="review-view-button" aria-label={`View ${request.requestNumber}`} onClick={() => setSelectedRequest(request)}>
+                    <span className={`request-table-status ${request.status.toLowerCase()}`}>
+                      {request.status.replaceAll('_', ' ')}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className="review-view-button"
+                      aria-label={`View ${request.requestNumber}`}
+                      onClick={() => setSelectedRequest(request)}
+                    >
                       <Eye size={21} /> View request
                     </button>
                   </td>
@@ -199,14 +234,33 @@ export default function ReviewRequestsPage() {
           </div>
         )}
       </section>
-      {selectedRequest && <RequestDetailsModal request={selectedRequest} onClose={() => setSelectedRequest(null)} onReject={() => void rejectRequest(selectedRequest.id)} onApprove={() => { setModalError(''); setApprovalRequest(selectedRequest); setSelectedRequest(null); }} />}
+      {selectedRequest && (
+        <RequestDetailsModal
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+          onReject={() => void rejectRequest(selectedRequest.id)}
+          onApprove={() => void approveRequest(selectedRequest.id)}
+          onApproveAndAllocate={() => {
+            setModalError('');
+            setApprovalRequest(selectedRequest);
+            setSelectedRequest(null);
+          }}
+        />
+      )}
       {approvalRequest && (
         <ApprovalAllocationModal
           request={approvalRequest}
-          allocations={allocations.filter((allocation) => ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (!allocation.request || allocation.request.id === approvalRequest.id))}
+          allocations={allocations.filter(
+            (allocation) =>
+              ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) &&
+              (!allocation.request || allocation.request.id === approvalRequest.id),
+          )}
           vehicles={vehicles}
           drivers={drivers}
-          onClose={() => { setModalError(''); setApprovalRequest(null); }}
+          onClose={() => {
+            setModalError('');
+            setApprovalRequest(null);
+          }}
           error={modalError}
           onClearError={() => setModalError('')}
           onSubmit={(event) => void approveWithAllocation(event)}
@@ -216,7 +270,19 @@ export default function ReviewRequestsPage() {
   );
 }
 
-function RequestDetailsModal({ request, onClose, onReject, onApprove }: { request: VehicleRequest; onClose: () => void; onReject: () => void; onApprove: () => void }) {
+function RequestDetailsModal({
+  request,
+  onClose,
+  onReject,
+  onApprove,
+  onApproveAndAllocate,
+}: {
+  request: VehicleRequest;
+  onClose: () => void;
+  onReject: () => void;
+  onApprove: () => void;
+  onApproveAndAllocate: () => void;
+}) {
   const actionable = ['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status);
   return (
     <div className="master-modal-backdrop">
@@ -228,24 +294,59 @@ function RequestDetailsModal({ request, onClose, onReject, onApprove }: { reques
           </div>
           <button onClick={onClose}>x</button>
         </header>
-        <div className="approval-request-summary">
-          <strong>{request.staffName} ({request.employeeId})</strong>
-          <small>{request.location} · {request.directorate} · {request.department}</small>
-          <small>{request.status.replaceAll('_', ' ')} · {request.priority}</small>
-        </div>
-        <div className="master-form-grid">
-          <ReadOnly label="Purpose" value={request.purposeOfTrip} />
-          <ReadOnly label="Vehicle type" value={request.vehicleTypeName} />
-          <ReadOnly label="Destination" value={request.destination} />
-          <ReadOnly label="Passengers" value={request.numberOfPassengers ? String(request.numberOfPassengers) : 'Not specified'} />
-          <ReadOnly label="Departure" value={new Date(request.departureDate).toLocaleString()} />
-          <ReadOnly label="Expected return" value={new Date(request.expectedReturnDate).toLocaleString()} />
-          <ReadOnly label="Purpose details" value={request.remarks || 'No purpose details provided'} />
-        </div>
-        <footer>
-          <button type="button" className="secondary-action" onClick={onClose}>Close</button>
-          {actionable && <button type="button" className="secondary-action" onClick={onReject}><XCircle size={16}/> Reject</button>}
-          {actionable && <button type="button" className="primary-action" onClick={onApprove}>Approve &amp; allocate</button>}
+        <dl className="details-grid request-details-grid">
+          <RequestDetail label="Request ID" value={request.requestNumber} />
+          <RequestDetail label="Staff name" value={request.staffName} />
+          <RequestDetail label="Employee ID" value={request.employeeId} />
+          <RequestDetail label="Status" value={request.status.replaceAll('_', ' ')} />
+          <RequestDetail label="Directorate" value={request.directorate} />
+          <RequestDetail label="Department" value={request.department} />
+          <RequestDetail label="Unit" value={request.unit || 'Not provided'} />
+          <RequestDetail label="Office / location" value={request.location} />
+          <RequestDetail label="Purpose" value={request.purposeOfTrip} />
+          <RequestDetail label="Vehicle type" value={request.vehicleTypeName} />
+          <RequestDetail label="Destination" value={request.destination} />
+          <RequestDetail
+            label="Passengers"
+            value={
+              request.numberOfPassengers ? String(request.numberOfPassengers) : 'Not specified'
+            }
+          />
+          <RequestDetail
+            label="Departure"
+            value={new Date(request.departureDate).toLocaleString()}
+          />
+          <RequestDetail
+            label="Expected return"
+            value={new Date(request.expectedReturnDate).toLocaleString()}
+          />
+          <RequestDetail label="Priority" value={request.priority} />
+          <RequestDetail
+            label="Purpose details"
+            value={request.remarks || 'No purpose details provided'}
+            full
+          />
+        </dl>
+        <footer className="request-details-actions">
+          <button type="button" className="secondary-action" onClick={onClose}>
+            Close
+          </button>
+          {actionable && (
+            <div>
+              <button type="button" className="request-reject-action" onClick={onReject}>
+                <XCircle size={16} />
+                <span>Reject request</span>
+              </button>
+              {request.status !== 'APPROVED' && (
+                <button type="button" className="secondary-action" onClick={onApprove}>
+                  Approve
+                </button>
+              )}
+              <button type="button" className="primary-action" onClick={onApproveAndAllocate}>
+                Approve &amp; allocate
+              </button>
+            </div>
+          )}
         </footer>
       </section>
     </div>
@@ -276,8 +377,12 @@ function ApprovalAllocationModal({
     () => allocations.find((allocation) => allocation.id === allocationId),
     [allocationId, allocations],
   );
-  const vehicleOptions = vehicles.filter((vehicle) => vehicle.status === 'AVAILABLE' || vehicle.id === selectedAllocation?.vehicle.id);
-  const driverOptions = drivers.filter((driver) => driver.status === 'AVAILABLE' || driver.id === selectedAllocation?.driver.id);
+  const vehicleOptions = vehicles.filter(
+    (vehicle) => vehicle.status === 'AVAILABLE' || vehicle.id === selectedAllocation?.vehicle.id,
+  );
+  const driverOptions = drivers.filter(
+    (driver) => driver.status === 'AVAILABLE' || driver.id === selectedAllocation?.driver.id,
+  );
 
   return (
     <div className="master-modal-backdrop">
@@ -291,14 +396,21 @@ function ApprovalAllocationModal({
         </header>
         <form onSubmit={onSubmit}>
           <div className="approval-request-summary">
-            <strong>{request.staffName} ({request.employeeId})</strong>
+            <strong>
+              {request.staffName} ({request.employeeId})
+            </strong>
             <small>{request.purposeOfTrip}</small>
-            <small>{request.destination} · {new Date(request.departureDate).toLocaleString()} to {new Date(request.expectedReturnDate).toLocaleString()}</small>
+            <small>
+              {request.destination} · {new Date(request.departureDate).toLocaleString()} to{' '}
+              {new Date(request.expectedReturnDate).toLocaleString()}
+            </small>
           </div>
           {error && <div className="modal-alert error">{error}</div>}
           {selectedAllocation && (
             <div className="modal-alert info">
-              Using existing allocation for {selectedAllocation.vehicle.registrationNumber} and {selectedAllocation.driver.staffName}. This prevents creating an overlapping active allocation.
+              Using existing allocation for {selectedAllocation.vehicle.registrationNumber} and{' '}
+              {selectedAllocation.driver.staffName}. This prevents creating an overlapping active
+              allocation.
             </div>
           )}
           <div className="master-form-grid">
@@ -339,13 +451,30 @@ function ApprovalAllocationModal({
                 label: `${driver.staffName} (${driver.employeeId})`,
               }))}
             />
-            <Field name="startAt" label="Start date and time" type="datetime-local" value={toDatetimeLocal(selectedAllocation?.startAt || request.departureDate)} />
-            <Field name="expectedEndAt" label="Expected return" type="datetime-local" value={toDatetimeLocal(selectedAllocation?.expectedEndAt || request.expectedReturnDate)} />
+            <Field
+              name="startAt"
+              label="Start date and time"
+              type="datetime-local"
+              value={toDatetimeLocal(selectedAllocation?.startAt || request.departureDate)}
+            />
+            <Field
+              name="expectedEndAt"
+              label="Expected return"
+              type="datetime-local"
+              value={toDatetimeLocal(
+                selectedAllocation?.expectedEndAt || request.expectedReturnDate,
+              )}
+            />
             <Field name="notes" label="Notes" required={false} value={selectedAllocation?.notes} />
           </div>
           <footer>
-            <button type="button" className="secondary-action" onClick={onClose}>Cancel</button>
-            <button className="primary-action" disabled={!vehicleOptions.length || !driverOptions.length}>
+            <button type="button" className="secondary-action" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="primary-action"
+              disabled={!vehicleOptions.length || !driverOptions.length}
+            >
               Approve and allocate
             </button>
           </footer>
@@ -355,16 +484,36 @@ function ApprovalAllocationModal({
   );
 }
 
-function ReadOnly({ label, value }: { label: string; value: string }) {
+function RequestDetail({
+  label,
+  value,
+  full = false,
+}: {
+  label: string;
+  value: string;
+  full?: boolean;
+}) {
   return (
-    <label className="master-field">
-      <span>{label}</span>
-      <input readOnly value={value} />
-    </label>
+    <div className={full ? 'full' : undefined}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }
 
-function Field({ name, label, type = 'text', required = true, value }: { name: string; label: string; type?: string; required?: boolean; value?: string }) {
+function Field({
+  name,
+  label,
+  type = 'text',
+  required = true,
+  value,
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  value?: string;
+}) {
   return (
     <label className="master-field">
       <span>{label}</span>
@@ -396,11 +545,17 @@ function Select({
       <select
         name={name}
         required={required}
-        {...(onChange ? { value: value ?? '', onChange: (event) => onChange(event.target.value) } : { defaultValue: value ?? '' })}
+        {...(onChange
+          ? { value: value ?? '', onChange: (event) => onChange(event.target.value) }
+          : { defaultValue: value ?? '' })}
       >
-        <option value="" disabled={required}>{placeholder}</option>
+        <option value="" disabled={required}>
+          {placeholder}
+        </option>
         {options.map((option) => (
-          <option key={option.id} value={option.id}>{option.label}</option>
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
         ))}
       </select>
     </label>

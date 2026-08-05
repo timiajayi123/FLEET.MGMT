@@ -218,7 +218,7 @@ function DriverDashboard({ data }: { data: DashboardData }) {
     { label: 'Assignments', value: data.metrics.totalAssignments ?? 0, note: 'Request-backed allocations', icon: ClipboardList, tone: 'green' },
     { label: 'Completed trips', value: data.metrics.completedTrips ?? 0, note: 'Finished trips', icon: CheckCircle2, tone: 'blue' },
     { label: 'Active trips', value: data.metrics.activeTrips ?? 0, note: 'Currently in progress', icon: Navigation, tone: 'amber' },
-    { label: 'Distance', value: `${(data.metrics.totalDistance ?? 0).toFixed(1)} km`, note: 'Recent recorded distance', icon: Route, tone: 'purple' },
+    { label: 'Distance', value: `${(data.metrics.totalDistance ?? 0).toFixed(2)} km`, note: 'Recent recorded distance', icon: Route, tone: 'purple' },
   ];
   return <><MetricGrid metrics={metrics} /><DriverTripDashboard /></>;
   /*
@@ -232,7 +232,7 @@ function DriverDashboard({ data }: { data: DashboardData }) {
         </article>
         <article className="panel">
           <div className="panel-heading"><div><h2>Recent trips</h2><p>Your latest completed or active GPS trips.</p></div></div>
-          {data.recentTrips?.length ? <div className="notification-list">{data.recentTrips.map((trip) => <div className="notification-item" key={trip.id}><span><strong>{trip.vehicle.registrationNumber} · {trip.status.replaceAll('_', ' ')}</strong><small>{trip.request?.requestNumber} · {trip.allocation.destination || trip.request?.destination}</small><small>{(trip.calculatedDistance ?? 0).toFixed(1)} km</small></span></div>)}</div> : <Empty icon={<Route size={28} />} title="No trip history yet" text="Start and complete an assigned trip to populate this section." />}
+          {data.recentTrips?.length ? <div className="notification-list">{data.recentTrips.map((trip) => <div className="notification-item" key={trip.id}><span><strong>{trip.vehicle.registrationNumber} · {trip.status.replaceAll('_', ' ')}</strong><small>{trip.request?.requestNumber} · {trip.allocation.destination || trip.request?.destination}</small><small>{(trip.calculatedDistance ?? 0).toFixed(2)} km</small></span></div>)}</div> : <Empty icon={<Route size={28} />} title="No trip history yet" text="Start and complete an assigned trip to populate this section." />}
         </article>
       </section>
     </>

@@ -19,6 +19,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (path === '/operations/maintenance') return <MaintenanceWorkspace />;
   if (path === '/operations/fuel-management' || path === '/fuel/operations') return <FuelWorkspace view="operations" />;
   if (path === '/fuel/dashboard') return <FuelWorkspace view="dashboard" />;
+  if (path === '/fuel/history') return <FuelWorkspace view="history" />;
   if (path === '/fuel/cards') return <FuelWorkspace view="cards" />;
   if (path === '/fuel/stations') return <FuelWorkspace view="stations" />;
   if (path === '/ai/fleet-optimization') return <FleetAssistant />;

@@ -37,4 +37,7 @@ export class FleetGateway implements OnGatewayConnection {
   publishLocation(location: Record<string, unknown>) {
     this.server?.to('fleet-tracking').emit('vehicle-location', location);
   }
+  publishOverspeed(alert: Record<string, unknown>) {
+    this.server?.to('fleet-tracking').emit('overspeed-alert', alert);
+  }
 }

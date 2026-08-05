@@ -18,6 +18,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AiModule } from './ai/ai.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { FuelModule } from './fuel/fuel.module';
+import { SpeedModule } from './speed/speed.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { FuelModule } from './fuel/fuel.module';
     AiModule,
     MaintenanceModule,
     FuelModule,
+    SpeedModule,
   ],
 })
 export class AppModule {}

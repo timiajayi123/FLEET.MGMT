@@ -1,21 +1,125 @@
 'use client';
 
+import { GpsSpeedometer } from '@/components/gps-speedometer';
 import { del, get, set } from 'idb-keyval';
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Crosshair, MapPin, Maximize2, Minimize2, Navigation, Phone, Radio, ShieldAlert, Square, Wifi, WifiOff, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Crosshair,
+  MapPin,
+  Maximize2,
+  Minimize2,
+  Navigation,
+  Phone,
+  Radio,
+  ShieldAlert,
+  Square,
+  Wifi,
+  WifiOff,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-type Point = { allocationId: string; tripId: string; clientEventId: string; latitude: number; longitude: number; accuracy?: number; speed?: number; heading?: number; altitude?: number; recordedAt: string };
-type Allocation = { id: string; status: string; purpose: string; destination?: string; startAt: string; expectedEndAt: string; vehicle: { id: string; registrationNumber: string; manufacturer: string; model: string; imageMimeType?: string }; driver: { staffName: string; phone: string }; request?: { requestNumber?: string; staffName: string; purposeOfTrip: string; destination: string }; trip?: { id: string; status: string; calculatedDistance?: number; startedAt?: string; endedAt?: string } };
-type Dashboard = { driver: { staffName: string; employeeId: string; phone: string; passportMimeType?: string }; current: Allocation | null; upcoming: Allocation[]; recent: Allocation[] };
+type Point = {
+  allocationId: string;
+  tripId: string;
+  clientEventId: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  altitude?: number;
+  recordedAt: string;
+};
+type Allocation = {
+  id: string;
+  status: string;
+  purpose: string;
+  destination?: string;
+  startAt: string;
+  expectedEndAt: string;
+  vehicle: {
+    id: string;
+    registrationNumber: string;
+    manufacturer: string;
+    model: string;
+    imageMimeType?: string;
+  };
+  driver: { staffName: string; phone: string };
+  request?: {
+    requestNumber?: string;
+    staffName: string;
+    purposeOfTrip: string;
+    destination: string;
+  };
+  trip?: {
+    id: string;
+    status: string;
+    calculatedDistance?: number;
+    startedAt?: string;
+    endedAt?: string;
+  };
+};
+type Dashboard = {
+  driver: { staffName: string; employeeId: string; phone: string; passportMimeType?: string };
+  current: Allocation | null;
+  upcoming: Allocation[];
+  recent: Allocation[];
+};
 
 const QUEUE_KEY = 'fleet-gps-offline-points';
 
 export function DriverTripDashboard() {
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null), [message, setMessage] = useState(''), [tracking, setTracking] = useState(false), [permission, setPermission] = useState<PermissionState | 'unknown'>('unknown'), [online, setOnline] = useState(true), [queued, setQueued] = useState(0), [lastPoint, setLastPoint] = useState<Point | null>(null), [busy, setBusy] = useState(false), [locationPromptOpen, setLocationPromptOpen] = useState(false), [tripDetailsMinimised, setTripDetailsMinimised] = useState(false), [recentTripsExpanded, setRecentTripsExpanded] = useState(false);
-  const watchId = useRef<number | null>(null), lastSentAt = useRef(0), lastCoordinates = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null),
+    [message, setMessage] = useState(''),
+    [tracking, setTracking] = useState(false),
+    [permission, setPermission] = useState<PermissionState | 'unknown'>('unknown'),
+    [online, setOnline] = useState(true),
+    [queued, setQueued] = useState(0),
+    [lastPoint, setLastPoint] = useState<Point | null>(null),
+    [busy, setBusy] = useState(false),
+    [locationPromptOpen, setLocationPromptOpen] = useState(false),
+    [tripDetailsMinimised, setTripDetailsMinimised] = useState(false),
+    [recentTripsExpanded, setRecentTripsExpanded] = useState(false);
+  const watchId = useRef<number | null>(null),
+    lastSentAt = useRef(0),
+    lastCoordinates = useRef<{ latitude: number; longitude: number } | null>(null);
 
-  const load = useCallback(async () => { const response = await fetch('/api/vehicle-allocations/my-dashboard', { cache: 'no-store' }); if (response.ok) setDashboard(await response.json()); else setMessage('Unable to load your driver assignments.'); }, []);
-  useEffect(() => { const initial = window.setTimeout(() => { void load(); setOnline(navigator.onLine); void get<Point[]>(QUEUE_KEY).then((items) => setQueued(items?.length ?? 0)); }, 0); navigator.permissions?.query({ name: 'geolocation' }).then((result) => { setPermission(result.state); result.onchange = () => setPermission(result.state); }).catch(() => setPermission('unknown')); const onOnline = () => { setOnline(true); void flushQueue(); }; const onOffline = () => setOnline(false); window.addEventListener('online', onOnline); window.addEventListener('offline', onOffline); return () => { window.clearTimeout(initial); window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); stopWatcher(); }; }, [load]);
+  const load = useCallback(async () => {
+    const response = await fetch('/api/vehicle-allocations/my-dashboard', { cache: 'no-store' });
+    if (response.ok) setDashboard(await response.json());
+    else setMessage('Unable to load your driver assignments.');
+  }, []);
+  useEffect(() => {
+    const initial = window.setTimeout(() => {
+      void load();
+      setOnline(navigator.onLine);
+      void get<Point[]>(QUEUE_KEY).then((items) => setQueued(items?.length ?? 0));
+    }, 0);
+    navigator.permissions
+      ?.query({ name: 'geolocation' })
+      .then((result) => {
+        setPermission(result.state);
+        result.onchange = () => setPermission(result.state);
+      })
+      .catch(() => setPermission('unknown'));
+    const onOnline = () => {
+      setOnline(true);
+      void flushQueue();
+    };
+    const onOffline = () => setOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.clearTimeout(initial);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      stopWatcher();
+    };
+  }, [load]);
   useEffect(() => {
     if (!recentTripsExpanded) return;
     const previousOverflow = document.body.style.overflow;
@@ -30,52 +134,594 @@ export function DriverTripDashboard() {
     };
   }, [recentTripsExpanded]);
 
-  async function queuePoint(point: Point) { const items = (await get<Point[]>(QUEUE_KEY)) ?? []; if (!items.some((item) => item.clientEventId === point.clientEventId)) items.push(point); await set(QUEUE_KEY, items); setQueued(items.length); }
-  async function flushQueue() { const items = (await get<Point[]>(QUEUE_KEY)) ?? []; if (!items.length || !navigator.onLine) return; const response = await fetch('/api/driver-tracking/location/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ points: items }) }); if (response.ok) { await del(QUEUE_KEY); setQueued(0); } }
-  async function sendPoint(point: Point) { if (!navigator.onLine) return queuePoint(point); const response = await fetch('/api/driver-tracking/location', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(point) }); if (!response.ok) { await queuePoint(point); throw new Error('Location saved offline and will upload when your connection returns.'); } setLastPoint(point); await flushQueue(); }
-  function makePoint(position: GeolocationPosition, allocationId: string, tripId: string): Point { return { allocationId, tripId, clientEventId: crypto.randomUUID(), latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, speed: position.coords.speed ?? undefined, heading: position.coords.heading ?? undefined, altitude: position.coords.altitude ?? undefined, recordedAt: new Date(position.timestamp).toISOString() }; }
-  function startWatcher(allocationId: string, tripId: string) { stopWatcher(); watchId.current = navigator.geolocation.watchPosition((position) => { const now = Date.now(); const current = { latitude: position.coords.latitude, longitude: position.coords.longitude }; const moved = !lastCoordinates.current || distanceMeters(lastCoordinates.current, current) >= 10; if (now - lastSentAt.current < 10_000 && !moved) return; lastSentAt.current = now; lastCoordinates.current = current; void sendPoint(makePoint(position, allocationId, tripId)).then(() => setMessage('Live location tracking is active.')).catch((error: Error) => setMessage(error.message)); }, (error) => { setMessage(locationError(error)); if (error.code === error.PERMISSION_DENIED) stopWatcher(); }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 }); setTracking(true); }
-  function stopWatcher() { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); watchId.current = null; setTracking(false); }
-  function getPosition(options: PositionOptions) { return new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options)); }
-  async function currentPosition() { try { return await getPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 }); } catch (error) { if (!isGeolocationError(error) || error.code === error.PERMISSION_DENIED) throw error; return getPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 }); } }
+  async function queuePoint(point: Point) {
+    const items = (await get<Point[]>(QUEUE_KEY)) ?? [];
+    if (!items.some((item) => item.clientEventId === point.clientEventId)) items.push(point);
+    await set(QUEUE_KEY, items);
+    setQueued(items.length);
+  }
+  async function flushQueue() {
+    const items = (await get<Point[]>(QUEUE_KEY)) ?? [];
+    if (!items.length || !navigator.onLine) return;
+    const response = await fetch('/api/driver-tracking/location/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ points: items }),
+    });
+    if (response.ok) {
+      await del(QUEUE_KEY);
+      setQueued(0);
+    }
+  }
+  async function sendPoint(point: Point) {
+    if (!navigator.onLine) return queuePoint(point);
+    const response = await fetch('/api/driver-tracking/location', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(point),
+    });
+    if (!response.ok) {
+      await queuePoint(point);
+      throw new Error('Location saved offline and will upload when your connection returns.');
+    }
+    setLastPoint(point);
+    await flushQueue();
+  }
+  function makePoint(position: GeolocationPosition, allocationId: string, tripId: string): Point {
+    return {
+      allocationId,
+      tripId,
+      clientEventId: crypto.randomUUID(),
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+      speed: position.coords.speed ?? undefined,
+      heading: position.coords.heading ?? undefined,
+      altitude: position.coords.altitude ?? undefined,
+      recordedAt: new Date(position.timestamp).toISOString(),
+    };
+  }
+  function startWatcher(allocationId: string, tripId: string) {
+    stopWatcher();
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const now = Date.now();
+        const current = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        const moved =
+          !lastCoordinates.current || distanceMeters(lastCoordinates.current, current) >= 10;
+        if (now - lastSentAt.current < 10_000 && !moved) return;
+        lastSentAt.current = now;
+        lastCoordinates.current = current;
+        void sendPoint(makePoint(position, allocationId, tripId))
+          .then(() => setMessage('Live location tracking is active.'))
+          .catch((error: Error) => setMessage(error.message));
+      },
+      (error) => {
+        setMessage(locationError(error));
+        if (error.code === error.PERMISSION_DENIED) stopWatcher();
+      },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 },
+    );
+    setTracking(true);
+  }
+  function stopWatcher() {
+    if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+    watchId.current = null;
+    setTracking(false);
+  }
+  function getPosition(options: PositionOptions) {
+    return new Promise<GeolocationPosition>((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, options),
+    );
+  }
+  async function currentPosition() {
+    try {
+      return await getPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 });
+    } catch (error) {
+      if (!isGeolocationError(error) || error.code === error.PERMISSION_DENIED) throw error;
+      return getPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
+    }
+  }
 
-  async function action(path: string, body?: object) { setBusy(true); setMessage(''); try { const response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) }); const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || 'Action failed.'); await load(); return payload; } catch (error) { setMessage(error instanceof Error ? error.message : 'Action failed.'); throw error; } finally { setBusy(false); } }
-  async function accept() { if (dashboard?.current) await action(`/api/vehicle-allocations/${dashboard.current.id}/accept`); }
-  async function reject() { if (!dashboard?.current) return; const reason = window.prompt('Why are you rejecting this assignment?'); if (reason) await action(`/api/vehicle-allocations/${dashboard.current.id}/reject`, { reason }); }
-  async function startTrip() { const allocation = dashboard?.current; if (!allocation) return; if (!window.isSecureContext) return setMessage('Live GPS requires HTTPS on a phone. The local HTTP address can be used for login, but tracking needs a secure HTTPS address.'); if (!navigator.geolocation) return setMessage('Location is not available. Enable Location Services for this device and browser.'); setMessage('Requesting precise location permission…'); try { const position = await currentPosition(); const payload = await action(`/api/trips/${allocation.id}/start`, { latitude: position.coords.latitude, longitude: position.coords.longitude }); const tripId = payload.data.id as string; await sendPoint(makePoint(position, allocation.id, tripId)); startWatcher(allocation.id, tripId); setPermission('granted'); await load(); } catch (error) { setMessage(isGeolocationError(error) ? locationError(error) : 'Unable to start location tracking. Try again.'); } }
-  async function endTrip() { const allocation = dashboard?.current; if (!allocation?.trip || !window.confirm('End this trip and stop location tracking?')) return; let coordinate: { latitude?: number; longitude?: number } = {}; try { const position = await currentPosition(); coordinate = { latitude: position.coords.latitude, longitude: position.coords.longitude }; await sendPoint(makePoint(position, allocation.id, allocation.trip.id)); } catch { /* The backend can close with the latest saved point. */ } await flushQueue(); await action(`/api/trips/${allocation.trip.id}/end`, coordinate); stopWatcher(); await load(); }
-  async function emergency() { const allocation = dashboard?.current; if (!allocation || !window.confirm('Send an emergency alert to fleet administrators?')) return; await action(`/api/vehicle-allocations/${allocation.id}/emergency`, { message: 'Driver activated SOS from the mobile dashboard.' }); }
-  async function reportIssue() { const allocation = dashboard?.current; if (!allocation) return; const issue = window.prompt('Describe the vehicle or trip issue.'); if (issue) await action(`/api/vehicle-allocations/${allocation.id}/issue`, { message: issue }); }
+  async function action(path: string, body?: object) {
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body ?? {}),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(
+          Array.isArray(payload.message)
+            ? payload.message.join(' ')
+            : payload.message || 'Action failed.',
+        );
+      await load();
+      return payload;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Action failed.');
+      throw error;
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function accept() {
+    if (dashboard?.current) await action(`/api/vehicle-allocations/${dashboard.current.id}/accept`);
+  }
+  async function reject() {
+    if (!dashboard?.current) return;
+    const reason = window.prompt('Why are you rejecting this assignment?');
+    if (reason) await action(`/api/vehicle-allocations/${dashboard.current.id}/reject`, { reason });
+  }
+  async function startTrip() {
+    const allocation = dashboard?.current;
+    if (!allocation) return;
+    if (!window.isSecureContext)
+      return setMessage(
+        'Live GPS requires HTTPS on a phone. The local HTTP address can be used for login, but tracking needs a secure HTTPS address.',
+      );
+    if (!navigator.geolocation)
+      return setMessage(
+        'Location is not available. Enable Location Services for this device and browser.',
+      );
+    setMessage('Requesting precise location permission…');
+    try {
+      const position = await currentPosition();
+      const payload = await action(`/api/trips/${allocation.id}/start`, {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      const tripId = payload.data.id as string;
+      await sendPoint(makePoint(position, allocation.id, tripId));
+      startWatcher(allocation.id, tripId);
+      setPermission('granted');
+      await load();
+    } catch (error) {
+      setMessage(
+        isGeolocationError(error)
+          ? locationError(error)
+          : 'Unable to start location tracking. Try again.',
+      );
+    }
+  }
+  async function endTrip() {
+    const allocation = dashboard?.current;
+    if (!allocation?.trip || !window.confirm('End this trip and stop location tracking?')) return;
+    let coordinate: { latitude?: number; longitude?: number } = {};
+    try {
+      const position = await currentPosition();
+      coordinate = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      await sendPoint(makePoint(position, allocation.id, allocation.trip.id));
+    } catch {
+      /* The backend can close with the latest saved point. */
+    }
+    await flushQueue();
+    await action(`/api/trips/${allocation.trip.id}/end`, coordinate);
+    stopWatcher();
+    await load();
+  }
+  async function emergency() {
+    const allocation = dashboard?.current;
+    if (!allocation || !window.confirm('Send an emergency alert to fleet administrators?')) return;
+    await action(`/api/vehicle-allocations/${allocation.id}/emergency`, {
+      message: 'Driver activated SOS from the mobile dashboard.',
+    });
+  }
+  async function reportIssue() {
+    const allocation = dashboard?.current;
+    if (!allocation) return;
+    const issue = window.prompt('Describe the vehicle or trip issue.');
+    if (issue) await action(`/api/vehicle-allocations/${allocation.id}/issue`, { message: issue });
+  }
 
-  if (!dashboard) return <div className="driver-dashboard-skeleton"><span /><span /><span /></div>;
+  if (!dashboard)
+    return (
+      <div className="driver-dashboard-skeleton">
+        <span />
+        <span />
+        <span />
+      </div>
+    );
   const allocation = dashboard.current;
-  return <div className="driver-trip-dashboard">
-    {locationPromptOpen && <LocationPermissionModal permission={permission} secure={window.isSecureContext} onCancel={() => setLocationPromptOpen(false)} onContinue={() => { setLocationPromptOpen(false); void startTrip(); }} />}
-    <header className="driver-mobile-header"><div className="driver-avatar">{dashboard.driver.staffName.split(' ').map((part) => part[0]).slice(0, 2).join('')}</div><div><small>DRIVER PORTAL</small><h2>{dashboard.driver.staffName}</h2><span className={online ? 'online' : 'offline'}>{online ? 'Online' : 'Offline'} · {tracking ? 'Tracking active' : 'Tracking off'}</span></div><button aria-label="Emergency" className="sos-icon" onClick={() => void emergency()}><ShieldAlert /></button></header>
-    {allocation ? <section className="assignment-card"><div className="assignment-heading"><div><small>CURRENT ASSIGNMENT</small><h3>{allocation.vehicle.manufacturer} {allocation.vehicle.model}</h3><strong>{allocation.vehicle.registrationNumber}</strong></div><span className={`trip-status ${allocation.status.toLowerCase()}`}>{allocation.status.replaceAll('_', ' ')}</span></div><dl><div><dt><MapPin size={14}/> Destination</dt><dd>{allocation.destination || allocation.request?.destination || 'Not specified'}</dd></div><div><dt>Purpose</dt><dd>{allocation.purpose}</dd></div><div><dt>Requesting staff</dt><dd>{allocation.request?.staffName || 'Fleet operations'}</dd></div><div><dt>Scheduled departure</dt><dd>{new Date(allocation.startAt).toLocaleString()}</dd></div><div><dt>Expected return</dt><dd>{new Date(allocation.expectedEndAt).toLocaleString()}</dd></div></dl><div className="driver-actions">{allocation.status === 'ASSIGNED' && <><button className="primary-action" disabled={busy} onClick={() => void accept()}><Check size={18}/> Accept assignment</button><button className="secondary-action" disabled={busy} onClick={() => void reject()}><X size={18}/> Reject</button></>}{['ASSIGNED','ACCEPTED'].includes(allocation.status) && <button className="start-trip-button" disabled={busy} onClick={() => setLocationPromptOpen(true)}><Navigation size={20}/> Start trip</button>}{allocation.status === 'IN_PROGRESS' && <><button className="end-trip-button" disabled={busy} onClick={() => void endTrip()}><Square size={18}/> End trip</button><button className="sos-button" onClick={() => void emergency()}><ShieldAlert size={18}/> Emergency / SOS</button></>}<button className="secondary-action" disabled={busy} onClick={() => void reportIssue()}><AlertTriangle size={18}/> Report issue</button></div></section> : <section className="driver-empty"><Navigation size={34}/><h3>No current assignment</h3><p>Your next approved fleet assignment will appear here.</p></section>}
-    <section className={`tracking-card ${tripDetailsMinimised ? 'minimised' : ''}`}><div className="tracking-title"><Radio className={tracking ? 'pulse' : ''}/><div><h3>{tracking ? 'Live tracking active' : 'Location tracking off'}</h3><p>Tracking runs only during an authorized trip.</p></div><button className="tracking-minimise" onClick={() => setTripDetailsMinimised((value) => !value)} aria-label={tripDetailsMinimised ? 'Show trip tracking details' : 'Minimise trip tracking details'}>{tripDetailsMinimised ? <ChevronDown size={18}/> : <ChevronUp size={18}/>}</button></div>{tripDetailsMinimised ? <button className="trip-speed-pill" onClick={() => setTripDetailsMinimised(false)}>{speedLabel(lastPoint?.speed)}</button> : <><div className="tracking-overview"><SpeedCard speedMetresPerSecond={lastPoint?.speed} recordedAt={lastPoint?.recordedAt}/><div className="tracking-metrics"><span><Crosshair/> GPS <b>{permission}</b></span><span>{online ? <Wifi/> : <WifiOff/>} Network <b>{online ? 'online' : 'offline'}</b></span><span><AlertTriangle/> Accuracy <b>{lastPoint?.accuracy ? `${Math.round(lastPoint.accuracy)} m` : '—'}</b></span><span><Navigation/> Heading <b>{lastPoint?.heading ? `${Math.round(lastPoint.heading)}°` : '—'}</b></span></div></div><p className="queue-note">{queued} offline point{queued === 1 ? '' : 's'} queued · Last update {lastPoint ? new Date(lastPoint.recordedAt).toLocaleTimeString() : 'none'}</p>{message && <div className="driver-message">{message}</div>}</>}</section>
-    <section className="driver-list-section"><h3>Upcoming assignments</h3>{dashboard.upcoming.length ? dashboard.upcoming.map((item) => <article key={item.id}><MapPin/><div><strong>{item.destination}</strong><small>{item.vehicle.registrationNumber} · {new Date(item.startAt).toLocaleString()}</small></div></article>) : <p>No upcoming assignments.</p>}</section>
-    <section className={`driver-list-section recent-trips-panel ${recentTripsExpanded ? 'expanded' : ''}`}><header><div><h3>Recent trips</h3><p>Your completed and active journey history.</p></div><button type="button" aria-label={recentTripsExpanded ? 'Exit full screen' : 'Expand recent trips to full screen'} onClick={() => setRecentTripsExpanded((value) => !value)}>{recentTripsExpanded ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}<span>{recentTripsExpanded ? 'Exit full screen' : 'Full screen'}</span></button></header><div className="recent-trips-list">{dashboard.recent.length ? dashboard.recent.map((item) => <article key={item.id}><Navigation/><div><strong>{item.destination || item.purpose}</strong><small>{item.vehicle.registrationNumber} · {item.vehicle.manufacturer} {item.vehicle.model}</small><small>{item.status.replaceAll('_', ' ')}{item.trip?.calculatedDistance ? ` · ${item.trip.calculatedDistance.toFixed(1)} km` : ''}{item.trip?.endedAt ? ` · ${new Date(item.trip.endedAt).toLocaleString()}` : ''}</small></div></article>) : <p>No completed trips yet.</p>}</div></section>
-    <a className="driver-help" href={`tel:${dashboard.driver.phone}`}><Phone size={16}/> Contact fleet support</a>
-  </div>;
+  return (
+    <div className="driver-trip-dashboard">
+      {locationPromptOpen && (
+        <LocationPermissionModal
+          permission={permission}
+          secure={window.isSecureContext}
+          onCancel={() => setLocationPromptOpen(false)}
+          onContinue={() => {
+            setLocationPromptOpen(false);
+            void startTrip();
+          }}
+        />
+      )}
+      <header className="driver-mobile-header">
+        <div className="driver-avatar">
+          {dashboard.driver.staffName
+            .split(' ')
+            .map((part) => part[0])
+            .slice(0, 2)
+            .join('')}
+        </div>
+        <div>
+          <small>DRIVER PORTAL</small>
+          <h2>{dashboard.driver.staffName}</h2>
+          <span className={online ? 'online' : 'offline'}>
+            {online ? 'Online' : 'Offline'} · {tracking ? 'Tracking active' : 'Tracking off'}
+          </span>
+        </div>
+        <button aria-label="Emergency" className="sos-icon" onClick={() => void emergency()}>
+          <ShieldAlert />
+        </button>
+      </header>
+      {allocation ? (
+        <section className="assignment-card">
+          <div className="assignment-heading">
+            <div>
+              <small>CURRENT ASSIGNMENT</small>
+              <h3>
+                {allocation.vehicle.manufacturer} {allocation.vehicle.model}
+              </h3>
+              <strong>{allocation.vehicle.registrationNumber}</strong>
+            </div>
+            <span className={`trip-status ${allocation.status.toLowerCase()}`}>
+              {allocation.status.replaceAll('_', ' ')}
+            </span>
+          </div>
+          <dl>
+            <div>
+              <dt>
+                <MapPin size={14} /> Destination
+              </dt>
+              <dd>
+                {allocation.destination || allocation.request?.destination || 'Not specified'}
+              </dd>
+            </div>
+            <div>
+              <dt>Purpose</dt>
+              <dd>{allocation.purpose}</dd>
+            </div>
+            <div>
+              <dt>Requesting staff</dt>
+              <dd>{allocation.request?.staffName || 'Fleet operations'}</dd>
+            </div>
+            <div>
+              <dt>Scheduled departure</dt>
+              <dd>{new Date(allocation.startAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>Expected return</dt>
+              <dd>{new Date(allocation.expectedEndAt).toLocaleString()}</dd>
+            </div>
+          </dl>
+          <div className="driver-actions">
+            {allocation.status === 'ASSIGNED' && (
+              <>
+                <button className="primary-action" disabled={busy} onClick={() => void accept()}>
+                  <Check size={18} /> Accept assignment
+                </button>
+                <button className="secondary-action" disabled={busy} onClick={() => void reject()}>
+                  <X size={18} /> Reject
+                </button>
+              </>
+            )}
+            {['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (
+              <button
+                className="start-trip-button"
+                disabled={busy}
+                onClick={() => setLocationPromptOpen(true)}
+              >
+                <Navigation size={20} /> Start trip
+              </button>
+            )}
+            {allocation.status === 'IN_PROGRESS' && (
+              <>
+                <button className="end-trip-button" disabled={busy} onClick={() => void endTrip()}>
+                  <Square size={18} /> End trip
+                </button>
+                <button className="sos-button" onClick={() => void emergency()}>
+                  <ShieldAlert size={18} /> Emergency / SOS
+                </button>
+              </>
+            )}
+            <button className="secondary-action" disabled={busy} onClick={() => void reportIssue()}>
+              <AlertTriangle size={18} /> Report issue
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="driver-empty">
+          <Navigation size={34} />
+          <h3>No current assignment</h3>
+          <p>Your next approved fleet assignment will appear here.</p>
+        </section>
+      )}
+      <section className={`tracking-card ${tripDetailsMinimised ? 'minimised' : ''}`}>
+        <div className="tracking-title">
+          <Radio className={tracking ? 'pulse' : ''} />
+          <div>
+            <h3>{tracking ? 'Your trip is being tracked' : 'Location tracking is not running'}</h3>
+            <p>
+              {tracking
+                ? 'Keep this page open while driving.'
+                : 'Tracking starts when you press Start trip.'}
+            </p>
+          </div>
+          <button
+            className="tracking-minimise"
+            onClick={() => setTripDetailsMinimised((value) => !value)}
+            aria-label={
+              tripDetailsMinimised ? 'Show trip tracking details' : 'Minimise trip tracking details'
+            }
+          >
+            {tripDetailsMinimised ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+          </button>
+        </div>
+        {tripDetailsMinimised ? (
+          <button className="trip-speed-pill" onClick={() => setTripDetailsMinimised(false)}>
+            {speedLabel(lastPoint?.speed)}
+          </button>
+        ) : (
+          <>
+            <div className="tracking-guide">
+              <span className={tracking ? 'done' : 'current'}>
+                <b>1</b> Start trip
+              </span>
+              <span className={tracking ? 'done' : ''}>
+                <b>2</b> Allow location
+              </span>
+              <span className={tracking ? 'current' : ''}>
+                <b>3</b> Drive and keep this page open
+              </span>
+              <span>
+                <b>4</b> Press End trip when finished
+              </span>
+            </div>
+            <div className="tracking-overview">
+              <GpsSpeedometer
+                speedMetresPerSecond={lastPoint?.speed}
+                recordedAt={lastPoint?.recordedAt}
+              />
+              <div className="tracking-metrics">
+                <span>
+                  <Crosshair /> Location <b>{plainPermission(permission)}</b>
+                </span>
+                <span>
+                  {online ? <Wifi /> : <WifiOff />} Internet{' '}
+                  <b>{online ? 'Connected' : 'Offline'}</b>
+                </span>
+                <span>
+                  <AlertTriangle /> Location quality <b>{accuracyLabel(lastPoint?.accuracy)}</b>
+                </span>
+                <span>
+                  <Navigation /> Direction{' '}
+                  <b>{lastPoint?.heading ? `${Math.round(lastPoint.heading)}°` : 'Waiting'}</b>
+                </span>
+              </div>
+            </div>
+            <p className="queue-note">
+              {queued ? `${queued} update${queued === 1 ? '' : 's'} waiting to upload · ` : ''}
+              Last location update:{' '}
+              {lastPoint
+                ? new Date(lastPoint.recordedAt).toLocaleTimeString()
+                : 'Waiting for trip to start'}
+            </p>
+            {message && <div className="driver-message">{message}</div>}
+          </>
+        )}
+      </section>
+      <section className="driver-list-section">
+        <h3>Upcoming assignments</h3>
+        {dashboard.upcoming.length ? (
+          dashboard.upcoming.map((item) => (
+            <article key={item.id}>
+              <MapPin />
+              <div>
+                <strong>{item.destination}</strong>
+                <small>
+                  {item.vehicle.registrationNumber} · {new Date(item.startAt).toLocaleString()}
+                </small>
+              </div>
+            </article>
+          ))
+        ) : (
+          <p>No upcoming assignments.</p>
+        )}
+      </section>
+      <section
+        className={`driver-list-section recent-trips-panel ${recentTripsExpanded ? 'expanded' : ''}`}
+      >
+        <header>
+          <div>
+            <h3>Recent trips</h3>
+            <p>Your completed and active journey history.</p>
+          </div>
+          <button
+            type="button"
+            aria-label={
+              recentTripsExpanded ? 'Exit full screen' : 'Expand recent trips to full screen'
+            }
+            onClick={() => setRecentTripsExpanded((value) => !value)}
+          >
+            {recentTripsExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            <span>{recentTripsExpanded ? 'Exit full screen' : 'Full screen'}</span>
+          </button>
+        </header>
+        <div className="recent-trips-list">
+          {dashboard.recent.length ? (
+            dashboard.recent.map((item) => (
+              <article key={item.id}>
+                <Navigation />
+                <div>
+                  <strong>{item.destination || item.purpose}</strong>
+                  <small>
+                    {item.vehicle.registrationNumber} · {item.vehicle.manufacturer}{' '}
+                    {item.vehicle.model}
+                  </small>
+                  <small>
+                    {item.status.replaceAll('_', ' ')}
+                    {item.trip?.calculatedDistance
+                      ? ` · ${item.trip.calculatedDistance.toFixed(1)} km`
+                      : ''}
+                    {item.trip?.endedAt ? ` · ${new Date(item.trip.endedAt).toLocaleString()}` : ''}
+                  </small>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p>No completed trips yet.</p>
+          )}
+        </div>
+      </section>
+      <a className="driver-help" href={`tel:${dashboard.driver.phone}`}>
+        <Phone size={16} /> Contact fleet support
+      </a>
+    </div>
+  );
 }
 
-function LocationPermissionModal({ permission, secure, onCancel, onContinue }: { permission: PermissionState | 'unknown'; secure: boolean; onCancel: () => void; onContinue: () => void }) {
-  return <div className="location-permission-backdrop" role="presentation" onMouseDown={onCancel}><section aria-describedby="location-permission-copy" aria-labelledby="location-permission-title" aria-modal="true" className="location-permission-modal" role="dialog" onMouseDown={(event) => event.stopPropagation()}><button aria-label="Close location permission" className="location-permission-close" type="button" onClick={onCancel}><X size={20}/></button><div className="location-permission-icon"><Crosshair size={30}/></div><small>DRIVER SAFETY & TRACKING</small><h2 id="location-permission-title">Enable precise location</h2><p id="location-permission-copy">Your location is used only while an authorized trip is active. Continue to let this device request precise location access.</p><div className="location-permission-status"><span><ShieldAlert size={17}/><b>Connection</b><em className={secure ? 'ready' : 'blocked'}>{secure ? 'Secure and ready' : 'HTTPS required'}</em></span><span><MapPin size={17}/><b>Browser permission</b><em className={permission === 'granted' ? 'ready' : permission === 'denied' ? 'blocked' : ''}>{permission}</em></span></div>{!secure && <div className="location-permission-warning">This local HTTP address can sign in, but phone GPS is blocked by the browser until the site uses HTTPS.</div>}{permission === 'denied' && <div className="location-permission-warning">Location is blocked in site settings. Change Location to Allow, then return and try again.</div>}<p className="location-permission-note">After you continue, approve the browser or operating-system permission if it appears.</p><footer><button className="secondary-action" type="button" onClick={onCancel}>Not now</button><button autoFocus className="primary-action" disabled={!secure} type="button" onClick={onContinue}>{permission === 'granted' ? 'Start tracking' : permission === 'denied' ? 'Try location again' : 'Continue'}</button></footer></section></div>;
-}
-
-function SpeedCard({ speedMetresPerSecond, recordedAt }: { speedMetresPerSecond?: number; recordedAt?: string }) {
-  const hasSpeed = typeof speedMetresPerSecond === 'number' && Number.isFinite(speedMetresPerSecond);
-  const speed = hasSpeed ? Math.max(0, Math.round(speedMetresPerSecond * 3.6)) : null;
-  const percent = Math.min(100, ((speed ?? 0) / 120) * 100);
-  return <div className="speed-card" role="meter" aria-label={hasSpeed ? `Current speed ${speed} kilometres per hour` : 'Current speed unavailable'} aria-valuemin={0} aria-valuemax={120} aria-valuenow={speed ?? undefined}><div className="speed-card-top"><span>Current speed</span><strong>{speed ?? '—'}<small>km/h</small></strong></div><div className="speed-bar" aria-hidden="true"><i style={{ width: `${percent}%` }}/></div><div className="speed-card-scale"><span>0</span><span>60</span><span>120+</span></div><p>{hasSpeed ? `GPS speed from ${recordedAt ? new Date(recordedAt).toLocaleTimeString() : 'latest point'}` : 'Waiting for GPS speed. Some phones report it only while moving.'}</p></div>;
+function LocationPermissionModal({
+  permission,
+  secure,
+  onCancel,
+  onContinue,
+}: {
+  permission: PermissionState | 'unknown';
+  secure: boolean;
+  onCancel: () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="location-permission-backdrop" role="presentation" onMouseDown={onCancel}>
+      <section
+        aria-describedby="location-permission-copy"
+        aria-labelledby="location-permission-title"
+        aria-modal="true"
+        className="location-permission-modal"
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <button
+          aria-label="Close location permission"
+          className="location-permission-close"
+          type="button"
+          onClick={onCancel}
+        >
+          <X size={20} />
+        </button>
+        <div className="location-permission-icon">
+          <Crosshair size={30} />
+        </div>
+        <small>DRIVER SAFETY & TRACKING</small>
+        <h2 id="location-permission-title">Enable precise location</h2>
+        <p id="location-permission-copy">
+          Your location is used only while an authorized trip is active. Continue to let this device
+          request precise location access.
+        </p>
+        <div className="location-permission-status">
+          <span>
+            <ShieldAlert size={17} />
+            <b>Connection</b>
+            <em className={secure ? 'ready' : 'blocked'}>
+              {secure ? 'Secure and ready' : 'HTTPS required'}
+            </em>
+          </span>
+          <span>
+            <MapPin size={17} />
+            <b>Browser permission</b>
+            <em
+              className={
+                permission === 'granted' ? 'ready' : permission === 'denied' ? 'blocked' : ''
+              }
+            >
+              {permission}
+            </em>
+          </span>
+        </div>
+        {!secure && (
+          <div className="location-permission-warning">
+            This local HTTP address can sign in, but phone GPS is blocked by the browser until the
+            site uses HTTPS.
+          </div>
+        )}
+        {permission === 'denied' && (
+          <div className="location-permission-warning">
+            Location is blocked in site settings. Change Location to Allow, then return and try
+            again.
+          </div>
+        )}
+        <p className="location-permission-note">
+          After you continue, approve the browser or operating-system permission if it appears.
+        </p>
+        <footer>
+          <button className="secondary-action" type="button" onClick={onCancel}>
+            Not now
+          </button>
+          <button
+            autoFocus
+            className="primary-action"
+            disabled={!secure}
+            type="button"
+            onClick={onContinue}
+          >
+            {permission === 'granted'
+              ? 'Start tracking'
+              : permission === 'denied'
+                ? 'Try location again'
+                : 'Continue'}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
 }
 
 function speedLabel(speedMetresPerSecond?: number) {
-  if (typeof speedMetresPerSecond !== 'number' || !Number.isFinite(speedMetresPerSecond)) return '— km/h';
+  if (typeof speedMetresPerSecond !== 'number' || !Number.isFinite(speedMetresPerSecond))
+    return '— km/h';
   return `${Math.max(0, Math.round(speedMetresPerSecond * 3.6))} km/h`;
 }
 
-function isGeolocationError(error: unknown): error is GeolocationPositionError { return typeof error === 'object' && error !== null && 'code' in error; }
-function locationError(error: GeolocationPositionError) { if (error.code === error.PERMISSION_DENIED) return 'Location permission was denied. Enable Location for this site in your browser settings, then try again.'; if (error.code === error.TIMEOUT) return 'Location could not be determined in time. On a laptop, enable Windows Location Services; on a phone, enable Precise Location and move near a window or outdoors.'; return 'Location is unavailable. Enable device Location Services and allow this browser to use them.'; }
-function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) { const rad = (value: number) => value * Math.PI / 180; const dLat = rad(b.latitude - a.latitude), dLon = rad(b.longitude - a.longitude); const value = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2; return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)); }
+function plainPermission(permission: PermissionState | 'unknown') {
+  if (permission === 'granted') return 'Allowed';
+  if (permission === 'denied') return 'Blocked';
+  if (permission === 'prompt') return 'Needs approval';
+  return 'Checking';
+}
+
+function accuracyLabel(accuracy?: number) {
+  if (!accuracy) return 'Waiting';
+  if (accuracy <= 20) return 'Excellent';
+  if (accuracy <= 50) return 'Good';
+  return 'Weak';
+}
+
+function isGeolocationError(error: unknown): error is GeolocationPositionError {
+  return typeof error === 'object' && error !== null && 'code' in error;
+}
+function locationError(error: GeolocationPositionError) {
+  if (error.code === error.PERMISSION_DENIED)
+    return 'Location permission was denied. Enable Location for this site in your browser settings, then try again.';
+  if (error.code === error.TIMEOUT)
+    return 'Location could not be determined in time. On a laptop, enable Windows Location Services; on a phone, enable Precise Location and move near a window or outdoors.';
+  return 'Location is unavailable. Enable device Location Services and allow this browser to use them.';
+}
+function distanceMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+) {
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const dLat = rad(b.latitude - a.latitude),
+    dLon = rad(b.longitude - a.longitude);
+  const value =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}

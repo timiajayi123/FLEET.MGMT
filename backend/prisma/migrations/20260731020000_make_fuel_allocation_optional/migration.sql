@@ -1,0 +1,1 @@
+ALTER TABLE [fuel_entries] ALTER COLUMN [allocationId] UNIQUEIDENTIFIER NULL;

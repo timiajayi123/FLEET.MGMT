@@ -5,10 +5,22 @@ import { apiMessage, readApiJson } from '@/lib/api-response';
 import { Pencil, Trash2 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 
-type Vehicle = { id: string; registrationNumber: string; manufacturer: string; model: string; status: string };
+type Vehicle = {
+  id: string;
+  registrationNumber: string;
+  manufacturer: string;
+  model: string;
+  status: string;
+};
 type Driver = { id: string; staffName: string; employeeId: string; status: string };
 type CurrentUser = { employeeId: string; role: { code: string; name: string } };
-type VehicleRequest = { id: string; requestNumber: string; staffName: string; destination: string; status: string };
+type VehicleRequest = {
+  id: string;
+  requestNumber: string;
+  staffName: string;
+  destination: string;
+  status: string;
+};
 type Allocation = {
   id: string;
   purpose: string;
@@ -31,20 +43,29 @@ export default function AllocationPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [mePayload, allocations, vehiclePayload, driverPayload, requestPayload] = await Promise.all([
-      fetch('/api/auth/me').then((r) => (r.ok ? readApiJson<{ user?: CurrentUser }>(r) : null)),
-      fetch('/api/vehicle-allocations').then((r) => readApiJson<{ data?: Allocation[] }>(r)),
-      fetch('/api/vehicles').then((r) => readApiJson<{ data?: Vehicle[] }>(r)),
-      fetch('/api/drivers').then((r) => readApiJson<{ data?: Driver[] }>(r)),
-      fetch('/api/vehicle-requests').then((r) => readApiJson<{ data?: VehicleRequest[] }>(r)),
-    ]);
-    setCurrentUser(mePayload?.user ?? null);
-    setItems(allocations.data || []);
-    setVehicles(vehiclePayload.data || []);
-    setDrivers(driverPayload.data || []);
-    setRequests(requestPayload.data || []);
+    setLoading(true);
+    try {
+      const [mePayload, allocations, vehiclePayload, driverPayload, requestPayload] =
+        await Promise.all([
+          fetch('/api/auth/me').then((r) => (r.ok ? readApiJson<{ user?: CurrentUser }>(r) : null)),
+          fetch('/api/vehicle-allocations').then((r) => readApiJson<{ data?: Allocation[] }>(r)),
+          fetch('/api/vehicles').then((r) => readApiJson<{ data?: Vehicle[] }>(r)),
+          fetch('/api/drivers').then((r) => readApiJson<{ data?: Driver[] }>(r)),
+          fetch('/api/vehicle-requests').then((r) => readApiJson<{ data?: VehicleRequest[] }>(r)),
+        ]);
+      setCurrentUser(mePayload?.user ?? null);
+      setItems(allocations.data || []);
+      setVehicles(vehiclePayload.data || []);
+      setDrivers(driverPayload.data || []);
+      setRequests(requestPayload.data || []);
+    } catch {
+      setError('Vehicle allocation data could not be loaded. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -59,11 +80,14 @@ export default function AllocationPage() {
     body.expectedEndAt = new Date(String(body.expectedEndAt)).toISOString();
     if (!body.requestId) delete body.requestId;
     const editing = mode?.type === 'edit';
-    const response = await fetch(`/api/vehicle-allocations${editing ? `/${mode.allocation.id}` : ''}`, {
-      method: editing ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(
+      `/api/vehicle-allocations${editing ? `/${mode.allocation.id}` : ''}`,
+      {
+        method: editing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
     const payload = await readApiJson(response, 'Unable to save allocation.');
     if (!response.ok) {
       setError(apiMessage(payload.message, 'Unable to save allocation.'));
@@ -87,7 +111,11 @@ export default function AllocationPage() {
     const response = await fetch(`/api/vehicle-allocations/${allocation.id}`, { method: 'DELETE' });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(Array.isArray(payload.message) ? payload.message.join(' ') : payload.message || 'Unable to delete allocation.');
+      setError(
+        Array.isArray(payload.message)
+          ? payload.message.join(' ')
+          : payload.message || 'Unable to delete allocation.',
+      );
       return;
     }
     setError('');
@@ -99,6 +127,8 @@ export default function AllocationPage() {
   const visibleItems = isDriver
     ? items.filter((allocation) => allocation.driver.employeeId === currentUser?.employeeId)
     : items;
+  const flexibleAllocations = visibleItems.filter((allocation) => Boolean(allocation.request));
+  const permanentAllocations = visibleItems.filter((allocation) => !allocation.request);
 
   return (
     <>
@@ -118,96 +148,162 @@ export default function AllocationPage() {
         }
       />
       {error && <div className="master-alert">{error}</div>}
-      <section className="master-panel">
-        <div className="master-table-wrap">
-          <table className="master-table">
-            <thead>
-              <tr>
-                <th>Vehicle</th>
-                <th>Driver</th>
-                <th>Request</th>
-                <th>Purpose</th>
-                <th>Period</th>
-                <th>Status</th>
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleItems.map((allocation) => (
-                <tr key={allocation.id}>
-                  <td>
-                    <strong>{allocation.vehicle.registrationNumber}</strong>
-                    <small>{allocation.vehicle.manufacturer} {allocation.vehicle.model}</small>
-                  </td>
-                  <td>
-                    <strong>{allocation.driver.staffName}</strong>
-                    <small>{allocation.driver.employeeId}</small>
-                  </td>
-                  <td>
-                    {allocation.request?.requestNumber ?? 'Direct allocation'}
-                    <small>{allocation.request?.staffName ?? ''}</small>
-                  </td>
-                  <td>
-                    {allocation.purpose}
-                    <small>{allocation.destination || ''}</small>
-                  </td>
-                  <td>
-                    {new Date(allocation.startAt).toLocaleString()}
-                    <small>to {new Date(allocation.expectedEndAt).toLocaleString()}</small>
-                  </td>
-                  <td>{allocation.status.replaceAll('_', ' ')}</td>
-                  <td>
-                    <div className="row-actions">
-                      {canManageAllocations && ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (
-                        <>
-                          <button aria-label={`Edit allocation ${allocation.id}`} onClick={() => setMode({ type: 'edit', allocation })}>
-                            <Pencil size={15} />
-                          </button>
-                          <button className="secondary-action" onClick={() => void complete(allocation.id)}>
-                            Complete
-                          </button>
-                        </>
-                      )}
-                      {canManageAllocations && (
-                        <button
-                          aria-label={`Delete allocation ${allocation.id}`}
-                          className="danger-action"
-                          onClick={() => void deleteAllocation(allocation)}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {visibleItems.length === 0 && (
-          <div className="master-empty">
-            <h2>{isDriver ? 'No allocations assigned to you' : 'No allocations yet'}</h2>
-            <p>
-              {isDriver
-                ? 'When fleet admin assigns a vehicle to your employee ID from an approved request, it will appear here.'
-                : 'Create an allocation here, or approve a staff request from Review Requests.'}
-            </p>
+      {loading ? (
+        <section className="master-panel allocation-loading" aria-live="polite">
+          <span className="allocation-loading-spinner" aria-hidden="true" />
+          <div>
+            <strong>Loading vehicle allocations</strong>
+            <p>Fetching allocation history and available fleet records…</p>
           </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <div className="allocation-history-sections">
+          <AllocationSection
+            title="Permanent allocations"
+            description="Direct vehicle-to-driver assignments and their history."
+            items={permanentAllocations}
+            canManage={canManageAllocations}
+            onEdit={(allocation) => setMode({ type: 'edit', allocation })}
+            onComplete={complete}
+            onDelete={deleteAllocation}
+          />
+          <AllocationSection
+            title="Flexible allocations"
+            description="Temporary, request-backed allocations and their history."
+            items={flexibleAllocations}
+            canManage={canManageAllocations}
+            onEdit={(allocation) => setMode({ type: 'edit', allocation })}
+            onComplete={complete}
+            onDelete={deleteAllocation}
+          />
+        </div>
+      )}
       {mode && canManageAllocations && (
         <AllocationModal
           mode={mode}
           vehicles={vehicles}
           drivers={drivers}
-          requests={requests.filter((request) => ['APPROVED', 'ALLOCATED'].includes(request.status) || request.id === mode.allocation?.request?.id)}
+          requests={requests.filter(
+            (request) =>
+              request.status === 'APPROVED' || request.id === mode.allocation?.request?.id,
+          )}
           onClose={() => setMode(null)}
           onSubmit={(event) => void save(event)}
         />
       )}
     </>
+  );
+}
+
+function AllocationSection({
+  title,
+  description,
+  items,
+  canManage,
+  onEdit,
+  onComplete,
+  onDelete,
+}: {
+  title: string;
+  description: string;
+  items: Allocation[];
+  canManage: boolean;
+  onEdit: (allocation: Allocation) => void;
+  onComplete: (id: string) => Promise<void>;
+  onDelete: (allocation: Allocation) => Promise<void>;
+}) {
+  return (
+    <section className="master-panel allocation-history-panel">
+      <header className="allocation-history-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <strong>{items.length}</strong>
+      </header>
+      <div className="master-table-wrap">
+        <table className="master-table allocation-table">
+          <thead>
+            <tr>
+              <th>Vehicle</th>
+              <th>Driver</th>
+              <th>Request</th>
+              <th>Purpose</th>
+              <th>Destination</th>
+              <th>Start time</th>
+              <th>End time</th>
+              <th>Status</th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((allocation) => (
+              <tr key={allocation.id}>
+                <td>
+                  <strong>{allocation.vehicle.registrationNumber}</strong>
+                  <small>
+                    {allocation.vehicle.manufacturer} {allocation.vehicle.model}
+                  </small>
+                </td>
+                <td>
+                  <strong>{allocation.driver.staffName}</strong>
+                </td>
+                <td>
+                  {allocation.request?.requestNumber ?? 'Direct allocation'}
+                  <small>{allocation.request?.staffName ?? ''}</small>
+                </td>
+                <td>{allocation.purpose}</td>
+                <td>{allocation.destination || 'Not specified'}</td>
+                <td className="allocation-date-cell">
+                  {new Date(allocation.startAt).toLocaleString()}
+                </td>
+                <td className="allocation-date-cell">
+                  {new Date(allocation.expectedEndAt).toLocaleString()}
+                </td>
+                <td>{allocation.status.replaceAll('_', ' ')}</td>
+                <td>
+                  <div className="row-actions">
+                    {canManage && ['ASSIGNED', 'ACCEPTED'].includes(allocation.status) && (
+                      <>
+                        <button
+                          aria-label={`Edit allocation ${allocation.id}`}
+                          onClick={() => onEdit(allocation)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          className="secondary-action"
+                          onClick={() => void onComplete(allocation.id)}
+                        >
+                          Complete
+                        </button>
+                      </>
+                    )}
+                    {canManage && (
+                      <button
+                        aria-label={`Delete allocation ${allocation.id}`}
+                        className="danger-action"
+                        onClick={() => void onDelete(allocation)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!items.length && (
+        <div className="master-empty">
+          <h2>No {title.toLowerCase()}</h2>
+          <p>This allocation history is currently empty.</p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -227,6 +323,9 @@ function AllocationModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const allocation = mode.allocation;
+  const [allocationKind, setAllocationKind] = useState<'PERMANENT' | 'FLEXIBLE'>(
+    allocation?.request ? 'FLEXIBLE' : 'PERMANENT',
+  );
   const vehicleOptions = vehicles.filter(
     (vehicle) => vehicle.status === 'AVAILABLE' || vehicle.id === allocation?.vehicle.id,
   );
@@ -244,17 +343,44 @@ function AllocationModal({
           <button onClick={onClose}>x</button>
         </header>
         <form onSubmit={onSubmit}>
+          <div className="allocation-kind-toggle" role="tablist" aria-label="Allocation type">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={allocationKind === 'PERMANENT'}
+              className={allocationKind === 'PERMANENT' ? 'active' : ''}
+              onClick={() => setAllocationKind('PERMANENT')}
+            >
+              Permanent
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={allocationKind === 'FLEXIBLE'}
+              className={allocationKind === 'FLEXIBLE' ? 'active' : ''}
+              onClick={() => setAllocationKind('FLEXIBLE')}
+            >
+              Flexible
+            </button>
+          </div>
+          <p className="allocation-kind-help">
+            {allocationKind === 'PERMANENT'
+              ? 'Assign a vehicle directly to a driver without linking a vehicle request.'
+              : 'Create a temporary allocation from an approved vehicle request.'}
+          </p>
           <div className="master-form-grid">
-            <Select
-              name="requestId"
-              label="Vehicle request (optional)"
-              placeholder="No request - direct vehicle-driver allocation"
-              required={false}
-              value={allocation?.request?.id}
-              options={requests.map((request) => ({ id: request.id, label: `${request.requestNumber} - ${request.staffName} - ${request.destination}` }))}
-            />
-            <Field name="purpose" label="Purpose" value={allocation?.purpose} />
-            <Field name="destination" label="Destination" value={allocation?.destination} />
+            {allocationKind === 'FLEXIBLE' && (
+              <Select
+                name="requestId"
+                label="Approved vehicle request"
+                placeholder="Select an approved request"
+                value={allocation?.request?.id}
+                options={requests.map((request) => ({
+                  id: request.id,
+                  label: `${request.requestNumber} - ${request.staffName} - ${request.destination}`,
+                }))}
+              />
+            )}
             <Select
               name="vehicleId"
               label="Vehicle"
@@ -272,16 +398,33 @@ function AllocationModal({
               value={allocation?.driver.id}
               options={driverOptions.map((driver) => ({
                 id: driver.id,
-                label: `${driver.staffName} (${driver.employeeId})`,
+                label: driver.staffName,
               }))}
             />
-            <Field name="startAt" label="Start date and time" type="datetime-local" value={toDatetimeLocal(allocation?.startAt)} />
-            <Field name="expectedEndAt" label="Expected return" type="datetime-local" value={toDatetimeLocal(allocation?.expectedEndAt)} />
+            <Field name="purpose" label="Purpose" value={allocation?.purpose} />
+            <Field name="destination" label="Destination" value={allocation?.destination} />
+            <Field
+              name="startAt"
+              label="Start date and time"
+              type="datetime-local"
+              value={toDatetimeLocal(allocation?.startAt)}
+            />
+            <Field
+              name="expectedEndAt"
+              label="Expected return"
+              type="datetime-local"
+              value={toDatetimeLocal(allocation?.expectedEndAt)}
+            />
             <Field name="notes" label="Notes" required={false} value={allocation?.notes} />
           </div>
           <footer>
-            <button type="button" className="secondary-action" onClick={onClose}>Cancel</button>
-            <button className="primary-action" disabled={!vehicleOptions.length || !driverOptions.length}>
+            <button type="button" className="secondary-action" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="primary-action"
+              disabled={!vehicleOptions.length || !driverOptions.length}
+            >
               {allocation ? 'Save allocation' : 'Create allocation'}
             </button>
           </footer>
@@ -291,7 +434,19 @@ function AllocationModal({
   );
 }
 
-function Field({ name, label, type = 'text', required = true, value }: { name: string; label: string; type?: string; required?: boolean; value?: string }) {
+function Field({
+  name,
+  label,
+  type = 'text',
+  required = true,
+  value,
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  value?: string;
+}) {
   return (
     <label className="master-field">
       <span>{label}</span>
@@ -319,9 +474,13 @@ function Select({
     <label className="master-field">
       <span>{label}</span>
       <select name={name} required={required} defaultValue={value ?? ''}>
-        <option value="" disabled={required}>{placeholder}</option>
+        <option value="" disabled={required}>
+          {placeholder}
+        </option>
         {options.map((option) => (
-          <option key={option.id} value={option.id}>{option.label}</option>
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
         ))}
       </select>
     </label>

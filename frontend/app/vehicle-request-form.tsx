@@ -15,22 +15,30 @@ const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/$
 export function VehicleRequestForm({ embedded = false }: { embedded?: boolean }) {
   const [state, setState] = useState<SubmissionState>({ type: 'idle' });
   const [dateError, setDateError] = useState('');
+  const [destinationError, setDestinationError] = useState('');
   const [directorateId, setDirectorateId] = useState('');
   const [locationValue, setLocationValue] = useState('');
   const [departmentValue, setDepartmentValue] = useState('');
   const [destinationValue, setDestinationValue] = useState('');
-  const [profile, setProfile] = useState<{ staffName: string; employeeId: string; directorateId?: string } | null>(null);
+  const [profile, setProfile] = useState<{
+    staffName: string;
+    employeeId: string;
+    directorateId?: string;
+  } | null>(null);
   const directorates = useMasterOptions('directorates');
   const departments = useMasterOptions('departments', directorateId, Boolean(directorateId));
   const locations = useMasterOptions('locations');
   const vehicleTypes = useMasterOptions('vehicle-types');
 
   useEffect(() => {
-    fetch('/api/auth/me').then(async (response) => response.ok ? response.json() : null).then((payload) => {
-      if (!payload?.user) return;
-      setProfile(payload.user);
-      setDirectorateId(payload.user.directorateId ?? '');
-    }).catch(() => undefined);
+    fetch('/api/auth/me')
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!payload?.user) return;
+        setProfile(payload.user);
+        setDirectorateId(payload.user.directorateId ?? '');
+      })
+      .catch(() => undefined);
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -41,10 +49,13 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
 
     const formData = new FormData(form);
     if (sameDestination(locationValue, destinationValue)) {
-      setState({ type: 'error', message: 'Destination From and Destination To must be different.' });
+      setDestinationError('Destination From and Destination To cannot be the same location.');
       return;
     }
-    const destinationMatch = locations.options.find((option) => option.name.toLocaleLowerCase() === destinationValue.trim().toLocaleLowerCase());
+    setDestinationError('');
+    const destinationMatch = locations.options.find(
+      (option) => option.name.toLocaleLowerCase() === destinationValue.trim().toLocaleLowerCase(),
+    );
     formData.set('customDestination', destinationMatch ? '' : destinationValue.trim());
     const departureDate = String(formData.get('departureDate'));
     const expectedReturnDate = String(formData.get('expectedReturnDate'));
@@ -97,6 +108,7 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       setLocationValue('');
       setDepartmentValue('');
       setDestinationValue('');
+      setDestinationError('');
       setState({ type: 'success', requestNumber: payload.requestNumber });
     } catch (error) {
       setState({
@@ -132,8 +144,21 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
           </div>
         </div>
         <div className="field-grid">
-          <Field label="Staff Name" name="staffName" minLength={2} maxLength={150} value={profile?.staffName} readOnly={Boolean(profile)} />
-          <Field label="Employee ID" name="employeeId" maxLength={50} value={profile?.employeeId} readOnly={Boolean(profile)} />
+          <Field
+            label="Staff Name"
+            name="staffName"
+            minLength={2}
+            maxLength={150}
+            value={profile?.staffName}
+            readOnly={Boolean(profile)}
+          />
+          <Field
+            label="Employee ID"
+            name="employeeId"
+            maxLength={50}
+            value={profile?.employeeId}
+            readOnly={Boolean(profile)}
+          />
           <MasterSelect
             label="Directorate"
             name="directorateId"
@@ -156,12 +181,7 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
               setDepartmentValue(value);
             }}
           />
-          <Field
-            label="Unit"
-            name="customUnit"
-            minLength={2}
-            maxLength={200}
-          />
+          <Field label="Unit (Optional)" name="customUnit" required={false} minLength={2} maxLength={200} />
         </div>
       </section>
 
@@ -177,16 +197,23 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
           <label className="field field-wide">
             <span>Purpose of Trip</span>
             <select name="purposeOfTrip" required defaultValue="">
-              <option value="" disabled>Select trip purpose</option>
+              <option value="" disabled>
+                Select trip purpose
+              </option>
               <option value="Official">Official</option>
               <option value="Non-Official">Non-Official</option>
             </select>
-            <small>Select whether this vehicle request is for official business.</small>
           </label>
           <label className="field field-wide">
             <span>Purpose details</span>
-            <textarea name="remarks" maxLength={2000} rows={3} placeholder="Optionally add more information about the trip." />
-            <small>Optional. Add any details that may help fleet review the request.</small>
+            <textarea
+              name="remarks"
+              required
+              minLength={2}
+              maxLength={2000}
+              rows={3}
+              placeholder="Describe the purpose of the trip."
+            />
           </label>
           <label className="field field-wide">
             <span>Vehicle Type</span>
@@ -202,18 +229,58 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             options={locations.options}
             loading={locations.loading}
             value={locationValue}
-            onChange={(value) => setLocationValue(value)}
+            onChange={(value) => {
+              setLocationValue(value);
+              setDestinationError(
+                sameDestination(value, destinationValue)
+                  ? 'Destination From and Destination To cannot be the same location.'
+                  : '',
+              );
+            }}
             idName="locationId"
             customName="customPickupLocation"
           />
-          <label className="field">
+          <label className={`field ${destinationError ? 'field-invalid' : ''}`}>
             <span>Destination To</span>
-            <input name="destination" list="vehicle-request-destinations" value={destinationValue} onChange={(event) => setDestinationValue(event.target.value)} required minLength={2} maxLength={300} placeholder="Select a registered location or type a destination" disabled={locations.loading} />
+            <input
+              name="destination"
+              list="vehicle-request-destinations"
+              value={destinationValue}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDestinationValue(value);
+                setDestinationError(
+                  sameDestination(locationValue, value)
+                    ? 'Destination From and Destination To cannot be the same location.'
+                    : '',
+                );
+              }}
+              required
+              minLength={2}
+              maxLength={300}
+              placeholder="Select a registered location or type a destination"
+              disabled={locations.loading}
+              aria-invalid={Boolean(destinationError)}
+              aria-describedby={destinationError ? 'destination-location-error' : undefined}
+            />
             <datalist id="vehicle-request-destinations">
-              {locations.options.map((option) => <option key={option.id} value={option.name}>{option.code}</option>)}
+              {locations.options.map((option) => (
+                <option key={option.id} value={option.name}>
+                  {option.code}
+                </option>
+              ))}
             </datalist>
-            <small>Select where the trip will end. It must differ from Destination From.</small>
           </label>
+          {destinationError && (
+            <p
+              id="destination-location-error"
+              className="field-validation-error field-wide"
+              role="alert"
+            >
+              <strong>Select a different destination</strong>
+              <span>{destinationError}</span>
+            </p>
+          )}
           <Field label="Departure Date" name="departureDate" type="datetime-local" />
           <label className={`field ${dateError ? 'field-invalid' : ''}`}>
             <span>Expected Return Date</span>
@@ -232,7 +299,7 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
             </p>
           )}
           <Field
-            label="Number of Passengers"
+            label="Number of Passengers (Optional)"
             name="numberOfPassengers"
             type="number"
             min={1}
@@ -260,9 +327,8 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
         </div>
         <div className="field-grid">
           <label className="field field-wide">
-            <span>Supporting document</span>
+            <span>Supporting document (Optional)</span>
             <input name="attachment" type="file" accept="application/pdf,image/jpeg,image/png" />
-            <small>Optional. PDF, JPEG, or PNG; maximum 10 MB.</small>
           </label>
         </div>
       </section>
@@ -282,14 +348,35 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       </div>
       {state.type === 'success' && (
         <div className="request-success-backdrop" role="presentation">
-          <section className="request-success-modal" role="dialog" aria-modal="true" aria-labelledby="request-success-title">
-            <button className="request-success-close" aria-label="Close success message" onClick={() => setState({ type: 'idle' })}><X size={18} /></button>
-            <div className="request-success-icon"><CheckCircle2 size={46} /></div>
+          <section
+            className="request-success-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="request-success-title"
+          >
+            <button
+              className="request-success-close"
+              aria-label="Close success message"
+              onClick={() => setState({ type: 'idle' })}
+            >
+              <X size={18} />
+            </button>
+            <div className="request-success-icon">
+              <CheckCircle2 size={46} />
+            </div>
             <small>VEHICLE REQUEST SUBMITTED</small>
             <h2 id="request-success-title">Request sent successfully</h2>
-            <p>Your vehicle request <strong>{state.requestNumber}</strong> has been submitted for fleet approval.</p>
-            <div className="request-success-status"><span>Current status</span><strong>Pending approval</strong></div>
-            <button className="primary-action" onClick={() => setState({ type: 'idle' })}>Okay, got it</button>
+            <p>
+              Your vehicle request <strong>{state.requestNumber}</strong> has been submitted for
+              fleet approval.
+            </p>
+            <div className="request-success-status">
+              <span>Current status</span>
+              <strong>Pending approval</strong>
+            </div>
+            <button className="primary-action" onClick={() => setState({ type: 'idle' })}>
+              Okay, got it
+            </button>
           </section>
         </div>
       )}
@@ -456,20 +543,66 @@ function CreatableMasterField({
     <>
       <label className="field">
         <span>{label}</span>
-        <input list={listId} value={value} onChange={(event) => {
-          const next = event.target.value;
-          const match = options.find((option) => option.name.toLocaleLowerCase() === next.trim().toLocaleLowerCase());
-          onChange(next, match?.id ?? '');
-        }} placeholder={loading ? 'Loading…' : `Select a saved ${label.toLowerCase()} or type one`} required minLength={2} maxLength={label === 'Location' ? 300 : 200} disabled={loading} />
-        <input type="hidden" name={idName} value={options.find((option) => option.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase())?.id ?? ''} />
-        <input type="hidden" name={customName} value={options.some((option) => option.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase()) ? '' : value.trim()} />
-        <datalist id={listId}>{options.map((option) => <option key={option.id} value={option.name}>{option.code}</option>)}</datalist>
-        <small>Select an existing record or type a new value without creating master data.</small>
+        <input
+          list={listId}
+          value={value}
+          onChange={(event) => {
+            const next = event.target.value;
+            const match = options.find(
+              (option) => option.name.toLocaleLowerCase() === next.trim().toLocaleLowerCase(),
+            );
+            onChange(next, match?.id ?? '');
+          }}
+          placeholder={loading ? 'Loading…' : `Select a saved ${label.toLowerCase()} or type one`}
+          required
+          minLength={2}
+          maxLength={label === 'Location' ? 300 : 200}
+          disabled={loading}
+        />
+        <input
+          type="hidden"
+          name={idName}
+          value={
+            options.find(
+              (option) => option.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+            )?.id ?? ''
+          }
+        />
+        <input
+          type="hidden"
+          name={customName}
+          value={
+            options.some(
+              (option) => option.name.toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+            )
+              ? ''
+              : value.trim()
+          }
+        />
+        <datalist id={listId}>
+          {options.map((option) => (
+            <option key={option.id} value={option.name}>
+              {option.code}
+            </option>
+          ))}
+        </datalist>
       </label>
-    <select name={`legacy-${idName}`} aria-hidden="true" tabIndex={-1} style={{ display: 'none' }} disabled>
-      <option value="" disabled>{loading ? 'Loading…' : 'Select destination'}</option>
-      {options.map((option) => <option key={option.id} value={option.name}>{option.name} ({option.code})</option>)}
-    </select>
+      <select
+        name={`legacy-${idName}`}
+        aria-hidden="true"
+        tabIndex={-1}
+        style={{ display: 'none' }}
+        disabled
+      >
+        <option value="" disabled>
+          {loading ? 'Loading…' : 'Select destination'}
+        </option>
+        {options.map((option) => (
+          <option key={option.id} value={option.name}>
+            {option.name} ({option.code})
+          </option>
+        ))}
+      </select>
     </>
   );
 }

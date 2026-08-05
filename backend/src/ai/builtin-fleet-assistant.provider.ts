@@ -25,7 +25,21 @@ export class BuiltinFleetAssistantProvider {
     if (/department/.test(question)) return response('Requests by department', 'These departments have the highest request volume in the selected period.', dashboard.requestsByDepartment.slice(0, 8));
     if (/vehicle.*(usage|utili[sz]ation|used)|most.*(vehicle|car|truck)|top.*vehicle/.test(question)) return response('Vehicle utilisation', 'Most-used vehicles are calculated from recorded request-backed trips.', dashboard.mostUsedVehicles);
     if (/(driver|chauffeur|operator).*(active|busy|activity)|most.*(driver|chauffeur)|top.*driver/.test(question)) return response('Driver activity', 'Most-active drivers are calculated from recorded request-backed trips.', dashboard.mostActiveDrivers);
-    if (/speed|overspeed|over speed|speeding|speed limit|fastest|maximum speed/.test(question)) { const speed = await this.analytics.speed({}, 100); return response('Driver speed events', `${speed.violations.length} recorded point(s) exceeded the configured 100 km/h threshold.`, [{ label: 'Speed violations', value: String(speed.violations.length) }, { label: 'Maximum speed', value: speed.maximumSpeed === null ? 'No GPS speed data' : `${speed.maximumSpeed.toFixed(1)} km/h` }]); }
+    if (/speed|overspeed|over speed|speeding|speed limit|fastest|maximum speed/.test(question)) {
+      if (this.prisma.speedViolation) {
+        const [active, total, fastest] = await Promise.all([
+          this.prisma.speedViolation.count({ where: { status: 'ACTIVE' } }),
+          this.prisma.speedViolation.count(),
+          this.prisma.speedViolation.findFirst({ orderBy: { maximumSpeed: 'desc' }, include: { vehicle: { select: { registrationNumber: true } }, driver: { select: { staffName: true } } } }),
+        ]);
+        return response('Speed compliance', `${active} active overspeed incident${active === 1 ? ' requires' : 's require'} attention.`, [
+          { label: 'Active violations', value: active }, { label: 'All recorded violations', value: total },
+          { label: 'Highest recorded speed', value: fastest ? `${fastest.maximumSpeed.toFixed(1)} km/h · ${fastest.vehicle.registrationNumber}${fastest.driver ? ` · ${fastest.driver.staffName}` : ''}` : 'No violation data' },
+        ], { label: 'Open speed monitoring', href: '/operations/speed-overspeed' });
+      }
+      const speed = await this.analytics.speed({}, 100);
+      return response('Driver speed events', `${speed.violations.length} recorded point(s) exceeded the configured 100 km/h threshold.`, [{ label: 'Speed violations', value: String(speed.violations.length) }, { label: 'Maximum speed', value: speed.maximumSpeed === null ? 'No GPS speed data' : `${speed.maximumSpeed.toFixed(1)} km/h` }]);
+    }
     if (/distance|kilomet(re|er)s?|km|mileage|travelled|traveled/.test(question)) return response('Recorded distance', `${dashboard.metrics.distanceTravelled.toFixed(1)} km was recorded in the selected period.`, [{ label: 'Distance recorded', value: `${dashboard.metrics.distanceTravelled.toFixed(1)} km` }, { label: 'Completed trips', value: String(dashboard.metrics.completedTrips) }], { label: 'Open trips', href: '/fleet/trips' });
     if (/help|what can|can you do|examples?|questions?/.test(question)) return response('What I can answer', 'Ask about fleet totals, drivers, vehicles, requests, trips, availability, maintenance, distance, speed events, vehicle usage, active drivers, departments, trip purpose, or reports.', [{ label: 'Example', value: 'How many drivers are registered?' }, { label: 'Example', value: 'How many vehicles are available?' }, { label: 'Example', value: 'Show pending vehicle requests' }, { label: 'Example', value: 'Which vehicle has the highest usage?' }]);
     return response('Fleet summary', `${dashboard.metrics.requests} vehicle requests, ${dashboard.metrics.activeTrips} active trips, and ${dashboard.metrics.completedTrips} completed trips were recorded in the selected period. Try asking “What was the last trip?” or “Show pending vehicle requests” for a detailed answer.`, [{ label: 'Requests', value: String(dashboard.metrics.requests) }, { label: 'Active trips', value: String(dashboard.metrics.activeTrips) }, { label: 'Completed trips', value: String(dashboard.metrics.completedTrips) }, { label: 'Distance recorded', value: `${dashboard.metrics.distanceTravelled.toFixed(1)} km` }]);
