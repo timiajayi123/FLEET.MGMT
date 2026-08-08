@@ -34,6 +34,7 @@ type Allocation = {
   driver: Driver;
 };
 type Mode = { type: 'create'; allocation?: undefined } | { type: 'edit'; allocation: Allocation };
+const ACTIVE_ALLOCATION_STATUSES = ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'];
 
 export default function AllocationPage() {
   const [items, setItems] = useState<Allocation[]>([]);
@@ -129,6 +130,9 @@ export default function AllocationPage() {
     : items;
   const flexibleAllocations = visibleItems.filter((allocation) => Boolean(allocation.request));
   const permanentAllocations = visibleItems.filter((allocation) => !allocation.request);
+  const activePermanentAllocationCount = permanentAllocations.filter((allocation) =>
+    ACTIVE_ALLOCATION_STATUSES.includes(allocation.status),
+  ).length;
 
   return (
     <>
@@ -162,6 +166,7 @@ export default function AllocationPage() {
             title="Permanent allocations"
             description="Direct vehicle-to-driver assignments and their history."
             items={permanentAllocations}
+            count={activePermanentAllocationCount}
             canManage={canManageAllocations}
             onEdit={(allocation) => setMode({ type: 'edit', allocation })}
             onComplete={complete}
@@ -199,6 +204,7 @@ function AllocationSection({
   title,
   description,
   items,
+  count,
   canManage,
   onEdit,
   onComplete,
@@ -207,6 +213,7 @@ function AllocationSection({
   title: string;
   description: string;
   items: Allocation[];
+  count?: number;
   canManage: boolean;
   onEdit: (allocation: Allocation) => void;
   onComplete: (id: string) => Promise<void>;
@@ -219,7 +226,7 @@ function AllocationSection({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
-        <strong>{items.length}</strong>
+        <strong>{count ?? items.length}</strong>
       </header>
       <div className="master-table-wrap">
         <table className="master-table allocation-table">

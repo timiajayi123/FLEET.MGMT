@@ -38,7 +38,7 @@ export class DashboardService {
       this.prisma.vehicleAllocation.count({
         where: {
           status: { in: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] },
-          requestId: { not: null },
+          requestId: null,
         },
       }),
       this.prisma.trip.count({ where: { status: 'COMPLETED', requestId: { not: null } } }),
