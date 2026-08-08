@@ -15,13 +15,15 @@ import {
 const decimal = ({ value }: { value: unknown }) =>
   value === '' || value === undefined || value === null ? undefined : Number(value);
 const text = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+const optionalId = ({ value }: { value: unknown }) =>
+  value === '' || value === undefined || value === null ? undefined : value;
 
 export class CreateFuelEntryDto {
   @IsOptional() @IsUUID() vehicleId?: string;
   @IsOptional() @IsUUID() driverId?: string;
   @IsOptional() @IsUUID() allocationId?: string;
   @IsOptional() @IsUUID() tripId?: string;
-  @IsOptional() @IsUUID() stationId?: string;
+  @Transform(optionalId) @IsOptional() @IsUUID() stationId?: string;
   @IsOptional() @IsUUID() fuelCardId?: string;
   @IsDateString() fuelingAt!: string;
   @Transform(text) @IsString() @IsNotEmpty() @MaxLength(200) stationName!: string;

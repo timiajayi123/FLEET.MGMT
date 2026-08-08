@@ -1251,11 +1251,12 @@ function DriverFuelEntryForm({
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
   const total = Number(litres || 0) * Number(price || 0);
 
-  function chooseStation(stationId: string) {
-    const station = stations.find((item) => item.id === stationId);
-    if (!station) return;
-    setStationName(station.name);
-    setStationLocation([station.city, station.state].filter(Boolean).join(', '));
+  function updateStationName(value: string) {
+    setStationName(value);
+    const station = stations.find(
+      (item) => item.name.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+    );
+    if (station) setStationLocation([station.city, station.state].filter(Boolean).join(', '));
   }
 
   return (
@@ -1305,30 +1306,34 @@ function DriverFuelEntryForm({
             values={['PMS', 'AGO / Diesel', 'LPG', 'CNG']}
           />
           <label className="fuel-field">
-            <span>Approved fuel station (optional)</span>
-            <select
-              name="stationId"
-              defaultValue=""
-              onChange={(event) => chooseStation(event.target.value)}
-            >
-              <option value="">Select or enter station below</option>
-              {stations.map((station) => (
-                <option key={station.id} value={station.id}>
-                  {station.name} · {station.state}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="fuel-field">
-            <span>Fuel station name</span>
+            <span>Fuel Station Name</span>
             <input
               name="stationName"
+              list="fuel-entry-stations"
               required
               maxLength={200}
               value={stationName}
-              onChange={(event) => setStationName(event.target.value)}
-              placeholder="Enter fuel station name"
+              onChange={(event) => updateStationName(event.target.value)}
+              placeholder="Select or enter fuel station name"
             />
+            <input
+              type="hidden"
+              name="stationId"
+              value={
+                stations.find(
+                  (station) =>
+                    station.name.trim().toLocaleLowerCase() ===
+                    stationName.trim().toLocaleLowerCase(),
+                )?.id ?? ''
+              }
+            />
+            <datalist id="fuel-entry-stations">
+              {stations.map((station) => (
+                <option key={station.id} value={station.name}>
+                  {[station.city, station.state].filter(Boolean).join(', ')}
+                </option>
+              ))}
+            </datalist>
           </label>
           <label className="fuel-field">
             <span>Fuel station location</span>
