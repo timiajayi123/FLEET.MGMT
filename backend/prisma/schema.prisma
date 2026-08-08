@@ -487,7 +487,6 @@ model DriverRating {
   stars      Int
   likedTrip  Boolean
   remark     String?        @db.NVarChar(1000)
-  complaint  String?        @db.NVarChar(1500)
   trip       Trip           @relation(fields: [tripId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   request    VehicleRequest @relation(fields: [requestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   driver     Driver         @relation(fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)

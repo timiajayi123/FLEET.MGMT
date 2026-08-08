@@ -325,7 +325,6 @@ function DriverRatingModal({
         stars,
         likedTrip,
         remark: form.get('remark'),
-        complaint: form.get('complaint'),
       }),
     });
     setSaving(false);
@@ -377,15 +376,6 @@ function DriverRatingModal({
               rows={3}
               maxLength={1000}
               placeholder="Tell us briefly about the journey"
-            />
-          </label>
-          <label>
-            <span>Complaint (optional)</span>
-            <textarea
-              name="complaint"
-              rows={3}
-              maxLength={1500}
-              placeholder="Report any concern that needs attention"
             />
           </label>
           {error && <p className="driver-rating-error">{error}</p>}

@@ -17,6 +17,7 @@ import {
   Wrench,
   Gauge,
   History,
+  Star,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -42,6 +43,12 @@ export const navigation: NavigationGroup[] = [
     items: [
       { label: 'Vehicles', href: '/fleet/vehicles', icon: CarFront, roles: ['S_ADMIN', 'FM'] },
       { label: 'Drivers', href: '/fleet/drivers', icon: Users, roles: ['S_ADMIN', 'FM'] },
+      {
+        label: 'Driver Ratings',
+        href: '/fleet/driver-ratings',
+        icon: Star,
+        roles: ['S_ADMIN', 'FM'],
+      },
       {
         label: 'Vehicle Request Form',
         href: '/fleet/vehicle-requests/new',

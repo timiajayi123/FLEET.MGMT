@@ -31,8 +31,63 @@ export class RatingsService {
         stars: dto.stars,
         likedTrip: dto.likedTrip,
         remark: dto.remark?.trim() || null,
-        complaint: dto.complaint?.trim() || null,
       },
     });
+  }
+
+  async list() {
+    const [drivers, recentRatings] = await Promise.all([
+      this.prisma.driver.findMany({
+        orderBy: { staffName: 'asc' },
+        select: {
+          id: true,
+          staffName: true,
+          employeeId: true,
+          status: true,
+          locationText: true,
+          location: { select: { name: true } },
+          ratings: { select: { stars: true } },
+        },
+      }),
+      this.prisma.driverRating.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          stars: true,
+          likedTrip: true,
+          remark: true,
+          createdAt: true,
+          driver: { select: { id: true, staffName: true, employeeId: true } },
+          ratedBy: { select: { staffName: true } },
+          request: { select: { requestNumber: true, destination: true } },
+          trip: { select: { vehicle: { select: { registrationNumber: true } } } },
+        },
+      }),
+    ]);
+    const driverRatings = drivers.map(({ ratings, ...driver }) => {
+      const total = ratings.reduce((sum, rating) => sum + rating.stars, 0);
+      return {
+        ...driver,
+        rating: ratings.length ? total / ratings.length : null,
+        ratingCount: ratings.length,
+      };
+    });
+    const ratedDrivers = driverRatings.filter((driver) => driver.ratingCount > 0);
+    const totalRatings = ratedDrivers.reduce((sum, driver) => sum + driver.ratingCount, 0);
+    const ratingTotal = ratedDrivers.reduce(
+      (sum, driver) => sum + Number(driver.rating) * driver.ratingCount,
+      0,
+    );
+    return {
+      metrics: {
+        totalDrivers: driverRatings.length,
+        ratedDrivers: ratedDrivers.length,
+        totalRatings,
+        averageRating: totalRatings ? ratingTotal / totalRatings : null,
+      },
+      drivers: driverRatings,
+      recentRatings,
+    };
   }
 }

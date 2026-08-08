@@ -1,4 +1,4 @@
-import { Body, Controller, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { requireUser } from '../common/request-auth';
@@ -11,6 +11,12 @@ export class RatingsController {
     private readonly ratings: RatingsService,
     private readonly auth: AuthService,
   ) {}
+
+  @Get()
+  async list(@Req() req: Request) {
+    await requireUser(this.auth, req, ['S_ADMIN', 'FM']);
+    return { data: await this.ratings.list() };
+  }
 
   @Post(':tripId')
   async create(
