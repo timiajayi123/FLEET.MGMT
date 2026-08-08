@@ -104,7 +104,6 @@ export class DashboardService {
       completedRequests,
       recent,
       latest,
-      pendingRating,
     ] = await Promise.all([
       this.prisma.vehicleRequest.count({ where: { requesterId: user.id } }),
       this.prisma.vehicleRequest.count({
@@ -139,7 +138,9 @@ export class DashboardService {
           },
         },
       }),
-      this.prisma.trip.findFirst({
+    ]);
+    const pendingRating = await this.prisma.trip
+      .findFirst({
         where: { status: 'COMPLETED', request: { requesterId: user.id }, rating: null },
         orderBy: { endedAt: 'desc' },
         select: {
@@ -149,8 +150,8 @@ export class DashboardService {
           vehicle: { select: { registrationNumber: true } },
           request: { select: { requestNumber: true, destination: true } },
         },
-      }),
-    ]);
+      })
+      .catch(() => null);
     return {
       role: 'STAFF',
       metrics: {
