@@ -24,8 +24,12 @@ export class AllocationsService {
   list(user: Pick<User, 'employeeId'> & { role: { code: string } }) {
     return this.prisma.vehicleAllocation.findMany({
       where: user.role.code === 'DRIVER'
-        ? { driver: { employeeId: user.employeeId }, ...REQUEST_BACKED_DRIVER_ASSIGNMENT }
-        : undefined,
+        ? {
+            driver: { employeeId: user.employeeId },
+            status: { not: 'CANCELLED' },
+            ...REQUEST_BACKED_DRIVER_ASSIGNMENT,
+          }
+        : { status: { not: 'CANCELLED' } },
       include,
       orderBy: { createdAt: 'desc' },
     });

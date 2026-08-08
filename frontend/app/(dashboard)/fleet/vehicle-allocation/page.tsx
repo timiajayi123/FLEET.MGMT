@@ -58,7 +58,7 @@ export default function AllocationPage() {
           fetch('/api/vehicle-requests').then((r) => readApiJson<{ data?: VehicleRequest[] }>(r)),
         ]);
       setCurrentUser(mePayload?.user ?? null);
-      setItems(allocations.data || []);
+      setItems((allocations.data || []).filter((allocation) => allocation.status !== 'CANCELLED'));
       setVehicles(vehiclePayload.data || []);
       setDrivers(driverPayload.data || []);
       setRequests(requestPayload.data || []);
@@ -120,7 +120,7 @@ export default function AllocationPage() {
       return;
     }
     setError('');
-    await load();
+    setItems((current) => current.filter((item) => item.id !== allocation.id));
   }
 
   const isDriver = currentUser?.role.code === 'DRIVER';
