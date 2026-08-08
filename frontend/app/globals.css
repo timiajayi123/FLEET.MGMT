@@ -838,7 +838,7 @@ button {
 .fleet-analytics-metrics .metric-icon { width: 2.25rem; height: 2.25rem; }
 .fleet-analytics-metrics .metric-card p { font-size: .67rem; }
 .fleet-analytics-metrics .metric-card strong { font-size: 1.25rem; }
-.fleet-analytics-metrics .metric-card small { display: none; }
+.fleet-analytics-metrics .metric-card small { display: block; }
 .fleet-activity-timeline { grid-column: 1 / -1; min-height: 25rem; }
 .activity-timeline-chart { display: block; width: 100%; height: 18rem; margin-top: .45rem; overflow: visible; }
 .activity-timeline-grid { stroke: color-mix(in srgb, var(--border) 82%, transparent); stroke-width: 1; }

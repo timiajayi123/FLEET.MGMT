@@ -52,11 +52,13 @@ type DriverPerformanceData = {
     performanceScore: number;
   }[];
 };
+type VehicleStatusRow = { status: string };
 
 export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [speed, setSpeed] = useState<SpeedData | null>(null);
   const [driverPerformance, setDriverPerformance] = useState<DriverPerformanceData | null>(null);
+  const [vehicleStatuses, setVehicleStatuses] = useState<VehicleStatusRow[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('30');
@@ -73,11 +75,13 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
       fetch(`/api/analytics/dashboard?${query}`, { signal: controller.signal }),
       fetch(`/api/analytics/reports/driver-performance?${query}`, { signal: controller.signal }),
       fetch(`/api/analytics/speed?${query}&threshold=100`, { signal: controller.signal }),
+      fetch('/api/vehicles', { signal: controller.signal, cache: 'no-store' }),
     ])
-      .then(async ([dashboardResponse, performanceResponse, speedResponse]) => {
+      .then(async ([dashboardResponse, performanceResponse, speedResponse, vehicleResponse]) => {
         const dashboardBody = await dashboardResponse.json();
         const performanceBody = await performanceResponse.json();
         const speedBody = await speedResponse.json();
+        const vehicleBody = vehicleResponse.ok ? await vehicleResponse.json() : { data: [] };
         if (!dashboardResponse.ok)
           throw new Error(dashboardBody.message || 'Unable to load analytics.');
         if (!speedResponse.ok)
@@ -88,12 +92,14 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
           dashboardBody as Dashboard,
           performanceBody as DriverPerformanceData,
           speedBody as SpeedData,
+          (vehicleBody.data ?? []) as VehicleStatusRow[],
         ] as const;
       })
-      .then(([dashboard, performanceData, speedData]) => {
+      .then(([dashboard, performanceData, speedData, vehicles]) => {
         setData(dashboard);
         setDriverPerformance(performanceData);
         setSpeed(speedData);
+        setVehicleStatuses(vehicles);
       })
       .catch((reason) => {
         if (reason.name !== 'AbortError') setError(reason.message);
@@ -103,19 +109,55 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
   }, [range]);
 
   const metrics = data?.metrics ?? {};
+  const totalVehicles = vehicleStatuses.length
+    ? vehicleStatuses.length
+    : Number(metrics.vehicles ?? 0);
+  const vehicleCount = (statuses: string[]) =>
+    vehicleStatuses.filter((vehicle) => statuses.includes(vehicle.status)).length;
+  const availableVehicles = vehicleStatuses.length
+    ? vehicleCount(['AVAILABLE'])
+    : Number(metrics.availableVehicles ?? 0);
+  const allocatedVehicles = vehicleCount(['ALLOCATED', 'IN_USE', 'RESERVED']);
+  const maintenanceVehicles = vehicleStatuses.length
+    ? vehicleCount(['MAINTENANCE'])
+    : Number(metrics.maintenanceVehicles ?? 0);
+  const outOfServiceVehicles = vehicleCount(['OUT_OF_SERVICE']);
   const cards = [
-    { label: 'Vehicles', value: metrics.vehicles, icon: CarFront },
-    { label: 'Available', value: metrics.availableVehicles, icon: CarFront },
-    { label: 'Requests', value: metrics.requests, icon: ClipboardList },
-    { label: 'Completed trips', value: metrics.completedTrips, icon: Route },
-    { label: 'Active drivers', value: metrics.activeDrivers, icon: Users },
     {
-      label: 'Distance',
-      value:
-        metrics.distanceTravelled === null || metrics.distanceTravelled === undefined
-          ? '—'
-          : `${Number(metrics.distanceTravelled).toFixed(1)} km`,
-      icon: Gauge,
+      label: 'Total vehicles',
+      value: totalVehicles,
+      note: 'All registered fleet vehicles',
+      icon: CarFront,
+    },
+    {
+      label: 'Available vehicles',
+      value: availableVehicles,
+      note: 'Ready for allocation',
+      icon: CarFront,
+    },
+    {
+      label: 'Allocated vehicles',
+      value: allocatedVehicles,
+      note: 'Assigned or currently in use',
+      icon: CarFront,
+    },
+    {
+      label: 'Maintenance',
+      value: maintenanceVehicles,
+      note: 'Currently under maintenance',
+      icon: CarFront,
+    },
+    {
+      label: 'Out of service',
+      value: outOfServiceVehicles,
+      note: 'Unavailable for allocation',
+      icon: CarFront,
+    },
+    {
+      label: 'Active drivers',
+      value: metrics.activeDrivers,
+      note: 'Drivers currently active',
+      icon: Users,
     },
   ];
   const speedOptions = individualOptions(speed?.trend ?? []);
@@ -181,7 +223,7 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
                 </div>
               </div>
               <section className="metric-grid fleet-analytics-metrics">
-                {cards.map(({ label, value, icon: Icon }) => (
+                {cards.map(({ label, value, note, icon: Icon }) => (
                   <article className="metric-card" key={label}>
                     <div className="metric-icon blue">
                       <Icon size={20} />
@@ -189,7 +231,7 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
                     <div>
                       <p>{label}</p>
                       <strong>{value ?? 0}</strong>
-                      <small>Recorded in fleet data</small>
+                      <small>{note}</small>
                     </div>
                   </article>
                 ))}

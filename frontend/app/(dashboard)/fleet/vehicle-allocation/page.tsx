@@ -15,13 +15,6 @@ type Vehicle = {
 };
 type Driver = { id: string; staffName: string; employeeId: string; status: string };
 type CurrentUser = { employeeId: string; role: { code: string; name: string } };
-type VehicleRequest = {
-  id: string;
-  requestNumber: string;
-  staffName: string;
-  destination: string;
-  status: string;
-};
 type Allocation = {
   id: string;
   purpose: string;
@@ -30,7 +23,7 @@ type Allocation = {
   expectedEndAt: string;
   notes?: string;
   status: string;
-  request?: VehicleRequest;
+  request?: { id: string } | null;
   vehicle: Vehicle;
   driver: Driver;
 };
@@ -40,7 +33,6 @@ export default function AllocationPage() {
   const [items, setItems] = useState<Allocation[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [requests, setRequests] = useState<VehicleRequest[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [mode, setMode] = useState<Mode | null>(null);
   const [error, setError] = useState('');
@@ -49,19 +41,21 @@ export default function AllocationPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [mePayload, allocations, vehiclePayload, driverPayload, requestPayload] =
+      const [mePayload, allocations, vehiclePayload, driverPayload] =
         await Promise.all([
           fetch('/api/auth/me').then((r) => (r.ok ? readApiJson<{ user?: CurrentUser }>(r) : null)),
           fetch('/api/vehicle-allocations').then((r) => readApiJson<{ data?: Allocation[] }>(r)),
           fetch('/api/vehicles').then((r) => readApiJson<{ data?: Vehicle[] }>(r)),
           fetch('/api/drivers').then((r) => readApiJson<{ data?: Driver[] }>(r)),
-          fetch('/api/vehicle-requests').then((r) => readApiJson<{ data?: VehicleRequest[] }>(r)),
         ]);
       setCurrentUser(mePayload?.user ?? null);
-      setItems((allocations.data || []).filter((allocation) => allocation.status !== 'CANCELLED'));
+      setItems(
+        (allocations.data || []).filter(
+          (allocation) => allocation.status !== 'CANCELLED' && !allocation.request,
+        ),
+      );
       setVehicles(vehiclePayload.data || []);
       setDrivers(driverPayload.data || []);
-      setRequests(requestPayload.data || []);
     } catch {
       setError('Vehicle allocation data could not be loaded. Please try again.');
     } finally {
@@ -79,7 +73,6 @@ export default function AllocationPage() {
     const body = Object.fromEntries(new FormData(event.currentTarget));
     body.startAt = new Date(String(body.startAt)).toISOString();
     body.expectedEndAt = new Date(String(body.expectedEndAt)).toISOString();
-    if (!body.requestId) delete body.requestId;
     const editing = mode?.type === 'edit';
     const response = await fetch(
       `/api/vehicle-allocations${editing ? `/${mode.allocation.id}` : ''}`,
@@ -128,7 +121,6 @@ export default function AllocationPage() {
   const visibleItems = isDriver
     ? items.filter((allocation) => allocation.driver.employeeId === currentUser?.employeeId)
     : items;
-  const flexibleAllocations = visibleItems.filter((allocation) => Boolean(allocation.request));
   const permanentAllocations = visibleItems.filter((allocation) => !allocation.request);
   const activePermanentAllocationCount = permanentAllocations.filter((allocation) =>
     isCurrentPermanentAllocation(allocation),
@@ -137,11 +129,11 @@ export default function AllocationPage() {
   return (
     <>
       <PageHeader
-        title={isDriver ? 'My Vehicle Allocations' : 'Vehicle Allocation'}
+        title={isDriver ? 'My Vehicle Allocations' : 'Vehicle to Driver Allocation'}
         description={
           isDriver
-            ? 'View vehicles currently allocated to you for approved request-backed trips.'
-            : 'View, create, edit, complete, and delete vehicle-driver allocations.'
+            ? 'View permanent vehicles currently allocated to you.'
+            : 'View, create, edit, complete, and delete permanent vehicle-driver allocations.'
         }
         actions={
           canManageAllocations ? (
@@ -172,15 +164,6 @@ export default function AllocationPage() {
             onComplete={complete}
             onDelete={deleteAllocation}
           />
-          <AllocationSection
-            title="Flexible allocations"
-            description="Temporary, request-backed allocations and their history."
-            items={flexibleAllocations}
-            canManage={canManageAllocations}
-            onEdit={(allocation) => setMode({ type: 'edit', allocation })}
-            onComplete={complete}
-            onDelete={deleteAllocation}
-          />
         </div>
       )}
       {mode && canManageAllocations && (
@@ -188,10 +171,6 @@ export default function AllocationPage() {
           mode={mode}
           vehicles={vehicles}
           drivers={drivers}
-          requests={requests.filter(
-            (request) =>
-              request.status === 'APPROVED' || request.id === mode.allocation?.request?.id,
-          )}
           onClose={() => setMode(null)}
           onSubmit={(event) => void save(event)}
         />
@@ -234,7 +213,6 @@ function AllocationSection({
             <tr>
               <th>Vehicle</th>
               <th>Driver</th>
-              <th>Request</th>
               <th>Purpose</th>
               <th>Destination</th>
               <th>Start time</th>
@@ -256,10 +234,6 @@ function AllocationSection({
                 </td>
                 <td>
                   <strong>{allocation.driver.staffName}</strong>
-                </td>
-                <td>
-                  {allocation.request?.requestNumber ?? 'Direct allocation'}
-                  <small>{allocation.request?.staffName ?? ''}</small>
                 </td>
                 <td>{allocation.purpose}</td>
                 <td>{allocation.destination || 'Not specified'}</td>
@@ -318,21 +292,16 @@ function AllocationModal({
   mode,
   vehicles,
   drivers,
-  requests,
   onClose,
   onSubmit,
 }: {
   mode: Mode;
   vehicles: Vehicle[];
   drivers: Driver[];
-  requests: VehicleRequest[];
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const allocation = mode.allocation;
-  const [allocationKind, setAllocationKind] = useState<'PERMANENT' | 'FLEXIBLE'>(
-    allocation?.request ? 'FLEXIBLE' : 'PERMANENT',
-  );
   const vehicleOptions = vehicles.filter(
     (vehicle) => vehicle.status === 'AVAILABLE' || vehicle.id === allocation?.vehicle.id,
   );
@@ -350,44 +319,10 @@ function AllocationModal({
           <button onClick={onClose}>x</button>
         </header>
         <form onSubmit={onSubmit}>
-          <div className="allocation-kind-toggle" role="tablist" aria-label="Allocation type">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={allocationKind === 'PERMANENT'}
-              className={allocationKind === 'PERMANENT' ? 'active' : ''}
-              onClick={() => setAllocationKind('PERMANENT')}
-            >
-              Permanent
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={allocationKind === 'FLEXIBLE'}
-              className={allocationKind === 'FLEXIBLE' ? 'active' : ''}
-              onClick={() => setAllocationKind('FLEXIBLE')}
-            >
-              Flexible
-            </button>
-          </div>
           <p className="allocation-kind-help">
-            {allocationKind === 'PERMANENT'
-              ? 'Assign a vehicle directly to a driver without linking a vehicle request.'
-              : 'Create a temporary allocation from an approved vehicle request.'}
+            Assign a vehicle directly to a driver without linking a vehicle request.
           </p>
           <div className="master-form-grid">
-            {allocationKind === 'FLEXIBLE' && (
-              <Select
-                name="requestId"
-                label="Approved vehicle request"
-                placeholder="Select an approved request"
-                value={allocation?.request?.id}
-                options={requests.map((request) => ({
-                  id: request.id,
-                  label: `${request.requestNumber} - ${request.staffName} - ${request.destination}`,
-                }))}
-              />
-            )}
             <Select
               name="vehicleId"
               label="Vehicle"
