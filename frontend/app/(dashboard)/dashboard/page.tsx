@@ -5,6 +5,10 @@ import { AnalyticsDashboard } from '@/components/analytics-dashboard';
 import { DriverTripDashboard } from '@/components/driver-trip-dashboard';
 import { apiMessage, readApiJson } from '@/lib/api-response';
 import {
+  countCurrentPermanentAllocations,
+  type AllocationForCount,
+} from '@/lib/allocation-count';
+import {
   ArrowUpRight,
   CarFront,
   CheckCircle2,
@@ -81,10 +85,26 @@ export default function DashboardPage() {
 
   const load = useCallback(
     () =>
-      fetch('/api/dashboard?days=30')
+      fetch('/api/dashboard?days=30', { cache: 'no-store' })
         .then(async (r) => {
           const p = await readApiJson<DashboardData>(r, 'Unable to load dashboard.');
           if (!r.ok) throw new Error(apiMessage(p.message, 'Unable to load dashboard.'));
+          if (p.role === 'ADMIN') {
+            const allocationResponse = await fetch('/api/vehicle-allocations', {
+              cache: 'no-store',
+            });
+            if (allocationResponse.ok) {
+              const allocationPayload = (await allocationResponse.json()) as {
+                data?: AllocationForCount[];
+              };
+              p.metrics = {
+                ...p.metrics,
+                activeAllocations: countCurrentPermanentAllocations(
+                  allocationPayload.data ?? [],
+                ),
+              };
+            }
+          }
           setData(p);
         })
         .catch((e) => setError(e.message)),
@@ -146,7 +166,7 @@ function AdminDashboard({ data }: { data: DashboardData | null }) {
     {
       label: 'Active allocations',
       value: data?.metrics.activeAllocations ?? 0,
-      note: 'Request-backed assignments',
+      note: 'Current permanent assignments',
       icon: CarFront,
       tone: 'blue',
     },

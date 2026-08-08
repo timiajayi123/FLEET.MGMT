@@ -20,6 +20,10 @@ import {
 } from 'lucide-react';
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { canAccessPath, visibleNavigation } from './navigation';
+import {
+  countCurrentPermanentAllocations,
+  type AllocationForCount,
+} from '@/lib/allocation-count';
 import { CsvImportBar } from './csv-import-bar';
 import { LocationMapPanel } from './location-map-panel';
 
@@ -50,12 +54,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [aiNavigationOpen, setAiNavigationOpen] = useState(() => pathname.startsWith('/ai/'));
+  const [settingsNavigationOpen, setSettingsNavigationOpen] = useState(() =>
+    pathname.startsWith('/administration/'),
+  );
   const [recordResults, setRecordResults] = useState<GlobalSearchResult[]>([]);
   useEffect(() => {
     // Route changes intentionally restore the best sidebar layout for that page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSidebarCollapsed(shouldAutoCollapseSidebar(pathname));
     if (pathname.startsWith('/ai/')) setAiNavigationOpen(true);
+    if (pathname.startsWith('/administration/')) setSettingsNavigationOpen(true);
   }, [pathname]);
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
@@ -82,12 +90,27 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!user) return;
     let active = true;
     const refreshSidebar = () => {
-      fetch('/api/dashboard?days=30', { cache: 'no-store' })
-        .then(async (response) => (response.ok ? response.json() : null))
-        .then((payload) => {
+      const allocationRequest = ['S_ADMIN', 'FM'].includes(user.role.code)
+        ? fetch('/api/vehicle-allocations', { cache: 'no-store' }).then(async (response) =>
+            response.ok ? response.json() : null,
+          )
+        : Promise.resolve(null);
+      Promise.all([
+        fetch('/api/dashboard?days=30', { cache: 'no-store' }).then(async (response) =>
+          response.ok ? response.json() : null,
+        ),
+        allocationRequest,
+      ])
+        .then(([payload, allocationPayload]) => {
           if (!active || !payload) return;
+          const metrics = { ...(payload.metrics ?? {}) };
+          if (allocationPayload?.data) {
+            metrics.activeAllocations = countCurrentPermanentAllocations(
+              allocationPayload.data as AllocationForCount[],
+            );
+          }
           setNotifications(payload.notifications ?? []);
-          setSidebarMetrics(payload.metrics ?? {});
+          setSidebarMetrics(metrics);
         })
         .catch(() => undefined);
     };
@@ -262,15 +285,24 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="sidebar-nav" aria-label="Primary navigation">
           {navGroups.map((group) => {
             const isAiGroup = group.label === 'AI';
-            const groupOpen = !isAiGroup || aiNavigationOpen;
+            const isSettingsGroup = group.label === 'Settings';
+            const isCollapsible = isAiGroup || isSettingsGroup;
+            const groupOpen = isAiGroup
+              ? aiNavigationOpen
+              : isSettingsGroup
+                ? settingsNavigationOpen
+                : true;
             return (
-              <div className={`nav-group${isAiGroup ? ' collapsible' : ''}`} key={group.label}>
-                {isAiGroup ? (
+              <div className={`nav-group${isCollapsible ? ' collapsible' : ''}`} key={group.label}>
+                {isCollapsible ? (
                   <button
                     type="button"
                     className="nav-group-toggle"
                     aria-expanded={groupOpen}
-                    onClick={() => setAiNavigationOpen((open) => !open)}
+                    onClick={() => {
+                      if (isAiGroup) setAiNavigationOpen((open) => !open);
+                      else setSettingsNavigationOpen((open) => !open);
+                    }}
                   >
                     <span>{group.label}</span>
                     <ChevronDown size={14} />

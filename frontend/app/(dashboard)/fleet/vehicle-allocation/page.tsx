@@ -1,6 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
+import { isCurrentPermanentAllocation } from '@/lib/allocation-count';
 import { apiMessage, readApiJson } from '@/lib/api-response';
 import { Pencil, Trash2 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
@@ -34,15 +35,6 @@ type Allocation = {
   driver: Driver;
 };
 type Mode = { type: 'create'; allocation?: undefined } | { type: 'edit'; allocation: Allocation };
-function isCurrentPermanentAllocation(allocation: Allocation, now = Date.now()) {
-  if (allocation.request) return false;
-  if (allocation.status === 'IN_PROGRESS') return true;
-  if (!['ASSIGNED', 'ACCEPTED'].includes(allocation.status)) return false;
-  return (
-    new Date(allocation.startAt).getTime() <= now &&
-    new Date(allocation.expectedEndAt).getTime() >= now
-  );
-}
 
 export default function AllocationPage() {
   const [items, setItems] = useState<Allocation[]>([]);
