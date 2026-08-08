@@ -431,24 +431,6 @@ export function FuelWorkspace({
               </div>
             )}
           </article>
-          <article className="panel fuel-history-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>{bootstrap.canManage ? 'Fuel approval queue & history' : 'My fuel history'}</h2>
-                <p>
-                  {bootstrap.canManage
-                    ? 'Review submitted entries and investigate warnings before approval.'
-                    : 'Your submitted entries and their approval status.'}
-                </p>
-              </div>
-              <ReceiptText size={20} />
-            </div>
-            <FuelEntryList
-              entries={entries}
-              canManage={Boolean(bootstrap.canManage)}
-              onSelect={setSelected}
-            />
-          </article>
         </section>
       )}
       {bootstrap && view === 'history' && (

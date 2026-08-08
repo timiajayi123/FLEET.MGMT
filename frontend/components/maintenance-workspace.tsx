@@ -43,7 +43,8 @@ type MaintenanceRequest = {
   createdAt: string;
 };
 
-export function MaintenanceWorkspace() {
+export function MaintenanceWorkspace({ view = 'workspace' }: { view?: 'workspace' | 'history' }) {
+  const historyView = view === 'history';
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
   const [canReview, setCanReview] = useState<boolean | null>(null);
@@ -69,7 +70,7 @@ export function MaintenanceWorkspace() {
   const [showAllReports, setShowAllReports] = useState(false);
   const [totalReports, setTotalReports] = useState(0);
   const [pendingTotal, setPendingTotal] = useState(0);
-  const historyLoaded = useRef(false);
+  const historyLoaded = useRef(historyView);
 
   const load = useCallback(async (showLoading = true, includeHistory = historyLoaded.current) => {
     if (showLoading) setLoading(true);
@@ -77,7 +78,7 @@ export function MaintenanceWorkspace() {
       if (showLoading) setError('');
       const limit = includeHistory ? 200 : 2;
       const requestResponse = await fetch(
-        `/api/maintenance?limit=${limit}&refresh=${Date.now()}`,
+        `/api/maintenance?limit=${limit}&view=${historyView ? 'history' : 'active'}&refresh=${Date.now()}`,
         { cache: 'no-store' },
       );
       const requestPayload = await requestResponse.json().catch(() => ({}));
@@ -96,7 +97,7 @@ export function MaintenanceWorkspace() {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [historyView]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -114,7 +115,7 @@ export function MaintenanceWorkspace() {
   }, [load]);
 
   useEffect(() => {
-    if (canReview !== false) return;
+    if (historyView || canReview !== false) return;
     const controller = new AbortController();
     setVehiclesLoading(true);
     fetch(`/api/maintenance/vehicles?refresh=${Date.now()}`, {
@@ -135,7 +136,7 @@ export function MaintenanceWorkspace() {
       })
       .finally(() => setVehiclesLoading(false));
     return () => controller.abort();
-  }, [canReview]);
+  }, [canReview, historyView]);
   const filteredRequests = useMemo(() => {
     const term = search.trim().toLowerCase();
     return requests.filter((request) => {
@@ -171,7 +172,11 @@ export function MaintenanceWorkspace() {
     toDate,
     vehicleFilter,
   ]);
-  const visibleRequests = showAllReports ? filteredRequests : filteredRequests.slice(0, 2);
+  const visibleRequests = historyView
+    ? filteredRequests
+    : showAllReports
+      ? filteredRequests
+      : filteredRequests.slice(0, 2);
 
   async function revealHistory() {
     setShowAllReports(true);
@@ -282,9 +287,11 @@ export function MaintenanceWorkspace() {
   return (
     <>
       <PageHeader
-        title="Vehicle Maintenance"
+        title={historyView ? 'Maintenance History' : 'Vehicle Maintenance'}
         description={
-          canReview === true
+          historyView
+            ? 'Review your completed maintenance reports, fleet decisions and final feedback.'
+            : canReview === true
             ? 'Review driver-submitted vehicle fault reports and record the fleet maintenance decision.'
             : 'Report a fault for a vehicle allocated to you. Fleet administrators will review it.'
         }
@@ -299,8 +306,8 @@ export function MaintenanceWorkspace() {
         </section>
       ) : (
         <>
-          <section className="maintenance-layout">
-            {canReview === false && (
+          <section className={`maintenance-layout ${historyView ? 'maintenance-history-layout' : ''}`}>
+            {canReview === false && !historyView && (
               <article className="panel maintenance-form-panel">
                 <div className="panel-heading">
                   <div>
@@ -382,17 +389,23 @@ export function MaintenanceWorkspace() {
               <div className="panel-heading">
                 <div>
                   <h2>
-                    {canReview === true ? 'Fleet maintenance review' : 'My maintenance requests'}
+                    {historyView
+                      ? 'Maintenance history'
+                      : canReview === true
+                        ? 'Fleet maintenance review'
+                        : 'My active maintenance requests'}
                   </h2>
                   <p>
-                    {canReview === true
+                    {historyView
+                      ? `${totalReports} completed maintenance record${totalReports === 1 ? '' : 's'}.`
+                      : canReview === true
                       ? `${pendingTotal} request${pendingTotal === 1 ? '' : 's'} awaiting review.`
-                      : 'Your submitted vehicle fault reports.'}
+                      : 'Requests awaiting a fleet decision or your feedback.'}
                   </p>
                 </div>
                 <ClipboardList size={20} />
               </div>
-              {canReview === true && (
+              {(canReview === true || historyView) && (
                 <MaintenanceFilters
                   requests={requests}
                   search={search}
@@ -413,7 +426,9 @@ export function MaintenanceWorkspace() {
                   setServiceFilter={setServiceFilter}
                   resultCount={filteredRequests.length}
                   onClear={clearFilters}
-                  onExpand={() => void revealHistory()}
+                  onExpand={() => {
+                    if (!historyView) void revealHistory();
+                  }}
                 />
               )}
               {filteredRequests.length ? (
@@ -478,7 +493,7 @@ export function MaintenanceWorkspace() {
                     </article>
                   ))}
                 </div>
-                {totalReports > 2 && (
+                {!historyView && totalReports > 2 && (
                   <button
                     type="button"
                     className="secondary-action maintenance-show-reports"
@@ -502,16 +517,20 @@ export function MaintenanceWorkspace() {
                   <h2>
                     {canReview === null
                       ? 'Loading maintenance requests'
+                      : historyView
+                        ? 'No maintenance history'
                       : canReview === true && requests.length
                         ? 'No matching maintenance requests'
                         : 'No maintenance requests'}
                   </h2>
                   <p>
-                    {canReview === true && requests.length
+                    {historyView
+                      ? 'Completed maintenance decisions will appear here after you send your feedback.'
+                      : canReview === true && requests.length
                       ? 'Change or clear the filters to see other maintenance requests.'
                       : canReview === true
                         ? 'Driver-submitted fault reports will appear here for review.'
-                        : 'Your submitted vehicle fault reports will appear here.'}
+                        : 'New fault reports and requests awaiting your feedback will appear here.'}
                   </p>
                 </div>
               )}

@@ -17,6 +17,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (path === '/analytics/dashboard') redirect('/dashboard');
   if (path === '/analytics/reports') return <Suspense fallback={<div className="panel"><p>Loading reports…</p></div>}><VehicleRequestReport /></Suspense>;
   if (path === '/operations/maintenance') return <MaintenanceWorkspace />;
+  if (path === '/operations/maintenance/history') return <MaintenanceWorkspace view="history" />;
   if (path === '/operations/fuel-management' || path === '/fuel/operations') return <FuelWorkspace view="operations" />;
   if (path === '/fuel/dashboard') return <FuelWorkspace view="dashboard" />;
   if (path === '/fuel/history') return <FuelWorkspace view="history" />;

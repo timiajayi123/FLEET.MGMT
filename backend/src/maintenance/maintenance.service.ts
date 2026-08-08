@@ -48,8 +48,14 @@ const listSelect = {
 export class MaintenanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(user: SessionUser, limit = 2) {
-    const where = user.role.code === 'DRIVER' ? { reportedById: user.id } : undefined;
+  async list(user: SessionUser, limit = 2, view: 'active' | 'history' = 'active') {
+    const where =
+      user.role.code === 'DRIVER'
+        ? {
+            reportedById: user.id,
+            driverFeedback: view === 'history' ? { not: null } : null,
+          }
+        : undefined;
     const [data, total, pendingTotal] = await Promise.all([
       this.prisma.maintenanceRequest.findMany({
         where,
@@ -192,6 +198,15 @@ export class MaintenanceService {
         });
         if (lockedFeedback.count !== 1)
           throw new BadRequestException('Your maintenance feedback is final and cannot be changed.');
+        if (dto.feedback === 'SATISFACTORY') {
+          await tx.vehicle.updateMany({
+            where: { id: request.vehicleId, status: 'MAINTENANCE' },
+            data: {
+              status: 'AVAILABLE',
+              serviceability: 'SERVICEABLE',
+            },
+          });
+        }
         return tx.maintenanceRequest.findUniqueOrThrow({ where: { id }, include });
       }),
     };

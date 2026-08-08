@@ -12,7 +12,11 @@ export class MaintenanceController {
   constructor(private readonly auth: AuthService, private readonly maintenance: MaintenanceService) {}
   @Get()
   @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
-  async list(@Req() req: Request, @Query('limit') requestedLimit?: string) {
+  async list(
+    @Req() req: Request,
+    @Query('limit') requestedLimit?: string,
+    @Query('view') requestedView?: string,
+  ) {
     const parsedLimit = Number(requestedLimit);
     const limit = Number.isFinite(parsedLimit)
       ? Math.min(200, Math.max(2, Math.floor(parsedLimit)))
@@ -20,6 +24,7 @@ export class MaintenanceController {
     return this.maintenance.list(
       await requireUser(this.auth, req, ['S_ADMIN', 'FM', 'DRIVER']),
       limit,
+      requestedView === 'history' ? 'history' : 'active',
     );
   }
   @Get('vehicles')

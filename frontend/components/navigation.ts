@@ -85,6 +85,12 @@ export const navigation: NavigationGroup[] = [
         roles: ['S_ADMIN', 'FM', 'DRIVER'],
       },
       {
+        label: 'Maintenance History',
+        href: '/operations/maintenance/history',
+        icon: History,
+        roles: ['DRIVER'],
+      },
+      {
         label: 'Speed & Overspeed',
         href: '/operations/speed-overspeed',
         icon: Gauge,
