@@ -69,6 +69,12 @@ type Dashboard = {
   upcoming: Allocation[];
   recent: Allocation[];
 };
+type SpeedFix = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  timestamp: number;
+};
 
 const QUEUE_KEY = 'fleet-gps-offline-points';
 
@@ -86,7 +92,9 @@ export function DriverTripDashboard() {
     [recentTripsExpanded, setRecentTripsExpanded] = useState(false);
   const watchId = useRef<number | null>(null),
     lastSentAt = useRef(0),
-    lastCoordinates = useRef<{ latitude: number; longitude: number } | null>(null);
+    lastCoordinates = useRef<{ latitude: number; longitude: number } | null>(null),
+    lastSpeedFix = useRef<SpeedFix | null>(null),
+    speedSamples = useRef<number[]>([]);
 
   const load = useCallback(async () => {
     const response = await fetch('/api/vehicle-allocations/my-dashboard', { cache: 'no-store' });
@@ -164,8 +172,66 @@ export function DriverTripDashboard() {
       await queuePoint(point);
       throw new Error('Location saved offline and will upload when your connection returns.');
     }
-    setLastPoint(point);
     await flushQueue();
+  }
+  function measuredSpeed(position: GeolocationPosition) {
+    const { coords, timestamp } = position;
+    const rawSpeed =
+      typeof coords.speed === 'number' &&
+      Number.isFinite(coords.speed) &&
+      coords.speed >= 0 &&
+      coords.speed <= 83.34
+        ? coords.speed
+        : undefined;
+    const currentFix: SpeedFix = {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy,
+      timestamp,
+    };
+    const previousFix = lastSpeedFix.current;
+    let derivedSpeed: number | undefined;
+    let displacement = 0;
+    if (previousFix) {
+      const elapsedSeconds = (timestamp - previousFix.timestamp) / 1000;
+      displacement = distanceMeters(previousFix, currentFix);
+      if (
+        elapsedSeconds >= 1 &&
+        elapsedSeconds <= 30 &&
+        previousFix.accuracy <= 75 &&
+        currentFix.accuracy <= 75
+      ) {
+        const noiseRadius = Math.max(
+          3,
+          Math.min(30, (previousFix.accuracy + currentFix.accuracy) * 0.2),
+        );
+        derivedSpeed = displacement <= noiseRadius ? 0 : displacement / elapsedSeconds;
+      }
+    }
+    lastSpeedFix.current = currentFix;
+
+    let candidate = rawSpeed;
+    if (candidate === undefined) candidate = derivedSpeed;
+    else if (
+      derivedSpeed !== undefined &&
+      Math.abs(candidate - derivedSpeed) <= Math.max(3, candidate * 0.5)
+    ) {
+      candidate = candidate * 0.75 + derivedSpeed * 0.25;
+    }
+    if (candidate === undefined || !Number.isFinite(candidate)) return undefined;
+
+    const stationaryRadius = previousFix
+      ? Math.max(3, Math.min(15, (previousFix.accuracy + currentFix.accuracy) * 0.15))
+      : 0;
+    if (previousFix && displacement <= stationaryRadius && candidate < 2) candidate = 0;
+
+    const samples = [...speedSamples.current, Math.max(0, Math.min(83.34, candidate))].slice(-3);
+    speedSamples.current = samples;
+    const sorted = [...samples].sort((first, second) => first - second);
+    const middle = Math.floor(sorted.length / 2);
+    const smoothed =
+      sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+    return Number((smoothed < 0.8 ? 0 : smoothed).toFixed(2));
   }
   function makePoint(position: GeolocationPosition, allocationId: string, tripId: string): Point {
     return {
@@ -175,17 +241,19 @@ export function DriverTripDashboard() {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       accuracy: position.coords.accuracy,
-      speed: position.coords.speed ?? undefined,
+      speed: measuredSpeed(position),
       heading: position.coords.heading ?? undefined,
       altitude: position.coords.altitude ?? undefined,
       recordedAt: new Date(position.timestamp).toISOString(),
     };
   }
   function startWatcher(allocationId: string, tripId: string) {
-    stopWatcher();
+    if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
     watchId.current = navigator.geolocation.watchPosition(
       (position) => {
         const now = Date.now();
+        const point = makePoint(position, allocationId, tripId);
+        setLastPoint(point);
         const current = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -195,7 +263,7 @@ export function DriverTripDashboard() {
         if (now - lastSentAt.current < 10_000 && !moved) return;
         lastSentAt.current = now;
         lastCoordinates.current = current;
-        void sendPoint(makePoint(position, allocationId, tripId))
+        void sendPoint(point)
           .then(() => setMessage('Live location tracking is active.'))
           .catch((error: Error) => setMessage(error.message));
       },
@@ -203,13 +271,17 @@ export function DriverTripDashboard() {
         setMessage(locationError(error));
         if (error.code === error.PERMISSION_DENIED) stopWatcher();
       },
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 },
     );
     setTracking(true);
   }
   function stopWatcher() {
     if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
     watchId.current = null;
+    lastSentAt.current = 0;
+    lastCoordinates.current = null;
+    lastSpeedFix.current = null;
+    speedSamples.current = [];
     setTracking(false);
   }
   function getPosition(options: PositionOptions) {
@@ -219,10 +291,10 @@ export function DriverTripDashboard() {
   }
   async function currentPosition() {
     try {
-      return await getPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 15000 });
+      return await getPosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
     } catch (error) {
       if (!isGeolocationError(error) || error.code === error.PERMISSION_DENIED) throw error;
-      return getPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 });
+      return getPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 });
     }
   }
 
@@ -278,7 +350,9 @@ export function DriverTripDashboard() {
         longitude: position.coords.longitude,
       });
       const tripId = payload.data.id as string;
-      await sendPoint(makePoint(position, allocation.id, tripId));
+      const initialPoint = makePoint(position, allocation.id, tripId);
+      setLastPoint(initialPoint);
+      await sendPoint(initialPoint);
       startWatcher(allocation.id, tripId);
       setPermission('granted');
       await load();
@@ -297,7 +371,9 @@ export function DriverTripDashboard() {
     try {
       const position = await currentPosition();
       coordinate = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-      await sendPoint(makePoint(position, allocation.id, allocation.trip.id));
+      const finalPoint = makePoint(position, allocation.id, allocation.trip.id);
+      setLastPoint(finalPoint);
+      await sendPoint(finalPoint);
     } catch {
       /* The backend can close with the latest saved point. */
     }
@@ -686,7 +762,7 @@ function LocationPermissionModal({
 function speedLabel(speedMetresPerSecond?: number) {
   if (typeof speedMetresPerSecond !== 'number' || !Number.isFinite(speedMetresPerSecond))
     return '— km/h';
-  return `${Math.max(0, Math.round(speedMetresPerSecond * 3.6))} km/h`;
+  return `${Math.max(0, speedMetresPerSecond * 3.6).toFixed(1)} km/h`;
 }
 
 function plainPermission(permission: PermissionState | 'unknown') {

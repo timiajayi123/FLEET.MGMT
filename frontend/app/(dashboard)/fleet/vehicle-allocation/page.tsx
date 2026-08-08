@@ -34,7 +34,15 @@ type Allocation = {
   driver: Driver;
 };
 type Mode = { type: 'create'; allocation?: undefined } | { type: 'edit'; allocation: Allocation };
-const ACTIVE_ALLOCATION_STATUSES = ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'];
+function isCurrentPermanentAllocation(allocation: Allocation, now = Date.now()) {
+  if (allocation.request) return false;
+  if (allocation.status === 'IN_PROGRESS') return true;
+  if (!['ASSIGNED', 'ACCEPTED'].includes(allocation.status)) return false;
+  return (
+    new Date(allocation.startAt).getTime() <= now &&
+    new Date(allocation.expectedEndAt).getTime() >= now
+  );
+}
 
 export default function AllocationPage() {
   const [items, setItems] = useState<Allocation[]>([]);
@@ -131,7 +139,7 @@ export default function AllocationPage() {
   const flexibleAllocations = visibleItems.filter((allocation) => Boolean(allocation.request));
   const permanentAllocations = visibleItems.filter((allocation) => !allocation.request);
   const activePermanentAllocationCount = permanentAllocations.filter((allocation) =>
-    ACTIVE_ALLOCATION_STATUSES.includes(allocation.status),
+    isCurrentPermanentAllocation(allocation),
   ).length;
 
   return (

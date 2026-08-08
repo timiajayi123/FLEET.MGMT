@@ -8,7 +8,6 @@ import {
   Map as MapIcon,
   MapPin,
   Route,
-  Settings,
   ShieldCheck,
   Sparkles,
   Tags,
@@ -117,35 +116,6 @@ export const navigation: NavigationGroup[] = [
     ],
   },
   {
-    label: 'Administration',
-    items: [
-      {
-        label: 'Roles',
-        href: '/administration/roles',
-        icon: ShieldCheck,
-        roles: ['S_ADMIN'],
-      },
-      {
-        label: 'Directorates',
-        href: '/administration/directorates',
-        icon: Building2,
-        roles: ['S_ADMIN'],
-      },
-      {
-        label: 'Departments',
-        href: '/administration/departments',
-        icon: Building2,
-        roles: ['S_ADMIN'],
-      },
-      {
-        label: 'Vehicle Types',
-        href: '/administration/vehicle-types',
-        icon: Tags,
-        roles: ['S_ADMIN'],
-      },
-    ],
-  },
-  {
     label: 'Analytics',
     items: [
       { label: 'Reports', href: '/analytics/reports', icon: BarChart3, roles: ['S_ADMIN', 'FM'] },
@@ -163,9 +133,32 @@ export const navigation: NavigationGroup[] = [
     ],
   },
   {
-    label: 'System',
+    label: 'Settings',
     items: [
-      { label: 'Settings', href: '/settings', icon: Settings, roles: ['S_ADMIN'] },
+      {
+        label: 'Roles',
+        href: '/administration/roles',
+        icon: ShieldCheck,
+        roles: ['S_ADMIN'],
+      },
+      {
+        label: 'Departments',
+        href: '/administration/departments',
+        icon: Building2,
+        roles: ['S_ADMIN'],
+      },
+      {
+        label: 'Directorates',
+        href: '/administration/directorates',
+        icon: Building2,
+        roles: ['S_ADMIN'],
+      },
+      {
+        label: 'Vehicle Types',
+        href: '/administration/vehicle-types',
+        icon: Tags,
+        roles: ['S_ADMIN'],
+      },
       { label: 'Locations', href: '/administration/locations', icon: MapPin, roles: ['S_ADMIN'] },
       { label: 'Users', href: '/administration/users', icon: Users, roles: ['S_ADMIN'] },
     ],

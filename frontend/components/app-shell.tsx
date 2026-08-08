@@ -49,11 +49,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [aiNavigationOpen, setAiNavigationOpen] = useState(() => pathname.startsWith('/ai/'));
   const [recordResults, setRecordResults] = useState<GlobalSearchResult[]>([]);
   useEffect(() => {
     // Route changes intentionally restore the best sidebar layout for that page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSidebarCollapsed(shouldAutoCollapseSidebar(pathname));
+    if (pathname.startsWith('/ai/')) setAiNavigationOpen(true);
   }, [pathname]);
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
@@ -258,34 +260,54 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <nav className="sidebar-nav" aria-label="Primary navigation">
-          {navGroups.map((group) => (
-            <div className="nav-group" key={group.label}>
-              <p>{group.label}</p>
-              {group.items.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
-                const Icon = item.icon;
-                const count = sidebarCount(item.href, roleCode, sidebarMetrics);
-                return (
-                  <Link
-                    className={active ? 'active' : ''}
-                    href={item.href}
-                    key={item.href}
-                    onClick={() => setSidebarOpen(false)}
+          {navGroups.map((group) => {
+            const isAiGroup = group.label === 'AI';
+            const groupOpen = !isAiGroup || aiNavigationOpen;
+            return (
+              <div className={`nav-group${isAiGroup ? ' collapsible' : ''}`} key={group.label}>
+                {isAiGroup ? (
+                  <button
+                    type="button"
+                    className="nav-group-toggle"
+                    aria-expanded={groupOpen}
+                    onClick={() => setAiNavigationOpen((open) => !open)}
                   >
-                    <Icon size={18} strokeWidth={1.8} />
-                    <span>{item.label}</span>
-                    {count > 0 && (
-                      <span className="nav-count" title={`${count} item${count === 1 ? '' : 's'}`}>
-                        {count > 99 ? '99+' : count}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+                    <span>{group.label}</span>
+                    <ChevronDown size={14} />
+                  </button>
+                ) : (
+                  <p>{group.label}</p>
+                )}
+                {groupOpen &&
+                  group.items.map((item) => {
+                    const active =
+                      pathname === item.href ||
+                      (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`));
+                    const Icon = item.icon;
+                    const count = sidebarCount(item.href, roleCode, sidebarMetrics);
+                    return (
+                      <Link
+                        className={active ? 'active' : ''}
+                        href={item.href}
+                        key={item.href}
+                        onClick={() => setSidebarOpen(false)}
+                      >
+                        <Icon size={18} strokeWidth={1.8} />
+                        <span>{item.label}</span>
+                        {count > 0 && (
+                          <span
+                            className="nav-count"
+                            title={`${count} item${count === 1 ? '' : 's'}`}
+                          >
+                            {count > 99 ? '99+' : count}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-user">
           {user?.passportMimeType ? (

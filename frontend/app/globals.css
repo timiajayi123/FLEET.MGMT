@@ -188,6 +188,31 @@ button {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+.nav-group-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.4rem;
+  padding: 0 0.7rem;
+  border: 0;
+  color: #79a288;
+  background: transparent;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.nav-group-toggle svg {
+  transition: transform 140ms ease;
+}
+.nav-group-toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.nav-group-toggle:hover,
+.nav-group-toggle:focus-visible {
+  color: #b7dac2;
+}
 .nav-group a {
   position: relative;
   display: flex;

@@ -8,7 +8,7 @@ export class TrackingPointDto {
   @IsNumber() @Min(-90) @Max(90) latitude!: number;
   @IsNumber() @Min(-180) @Max(180) longitude!: number;
   @IsOptional() @IsNumber() @Min(0) accuracy?: number;
-  @IsOptional() @IsNumber() @Min(0) speed?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(83.34) speed?: number;
   @IsOptional() @IsNumber() @Min(0) @Max(360) heading?: number;
   @IsOptional() @IsNumber() altitude?: number;
   @IsDateString() recordedAt!: string;

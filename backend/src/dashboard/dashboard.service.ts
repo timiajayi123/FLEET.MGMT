@@ -15,6 +15,7 @@ export class DashboardService {
 
   private async adminSummary(days: number) {
     const since = rangeStart(days);
+    const now = new Date();
     const [
       totalRequests,
       pendingRequests,
@@ -37,8 +38,15 @@ export class DashboardService {
       this.prisma.user.count({ where: { status: 'ACTIVE' } }),
       this.prisma.vehicleAllocation.count({
         where: {
-          status: { in: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] },
           requestId: null,
+          OR: [
+            { status: 'IN_PROGRESS' },
+            {
+              status: { in: ['ASSIGNED', 'ACCEPTED'] },
+              startAt: { lte: now },
+              expectedEndAt: { gte: now },
+            },
+          ],
         },
       }),
       this.prisma.trip.count({ where: { status: 'COMPLETED', requestId: { not: null } } }),

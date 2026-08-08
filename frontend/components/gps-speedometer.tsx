@@ -15,7 +15,9 @@ export function GpsSpeedometer({
 }: GpsSpeedometerProps) {
   const hasSpeed =
     typeof speedMetresPerSecond === 'number' && Number.isFinite(speedMetresPerSecond);
-  const speed = hasSpeed ? Math.max(0, Math.round(speedMetresPerSecond * 3.6)) : null;
+  const speed = hasSpeed
+    ? Math.max(0, Math.round(speedMetresPerSecond * 3.6 * 10) / 10)
+    : null;
   const angle = -180 + (Math.min(180, speed ?? 0) / 180) * 180;
   const state =
     speed === null
@@ -51,7 +53,7 @@ export function GpsSpeedometer({
           <i className="speed-needle" />
           <i className="speed-hub" />
           <div className="speed-readout">
-            <strong>{speed ?? '—'}</strong>
+            <strong>{speed === null ? '—' : speed.toFixed(1)}</strong>
             <small>km/h</small>
           </div>
         </div>
