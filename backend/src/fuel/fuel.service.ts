@@ -78,7 +78,7 @@ export class FuelService {
           },
         })
       : null;
-    const [stations, cards, vehicles, vehicleTypes] = await Promise.all([
+    const [stations, cards, vehicles, vehicleTypes, recentManualStations] = await Promise.all([
       this.prisma.fuelStation.findMany({
         where: { status: 'ACTIVE' },
         orderBy: { name: 'asc' },
@@ -144,7 +144,29 @@ export class FuelService {
         orderBy: { name: 'asc' },
         select: { id: true, name: true },
       }),
+      driver
+        ? this.prisma.fuelEntry.findMany({
+            where: { driverId: driver.id, stationId: null },
+            orderBy: { fuelingAt: 'desc' },
+            take: 100,
+            select: { stationName: true, stationLocation: true },
+          })
+        : [],
     ]);
+    const quickStations = recentManualStations.reduce<
+      { stationName: string; stationLocation: string }[]
+    >((entries, station) => {
+      const stationName = station.stationName?.trim();
+      const stationLocation = station.stationLocation?.trim();
+      if (!stationName || !stationLocation) return entries;
+      const exists = entries.some(
+        (entry) =>
+          entry.stationName.toLocaleLowerCase() === stationName.toLocaleLowerCase() &&
+          entry.stationLocation.toLocaleLowerCase() === stationLocation.toLocaleLowerCase(),
+      );
+      if (!exists) entries.push({ stationName, stationLocation });
+      return entries;
+    }, []);
     return {
       data: {
         canManage: manager,
@@ -154,6 +176,7 @@ export class FuelService {
         cards,
         vehicles,
         vehicleTypes,
+        quickStations,
       },
     };
   }

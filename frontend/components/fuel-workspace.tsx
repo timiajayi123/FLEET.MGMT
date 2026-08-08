@@ -62,6 +62,7 @@ type Bootstrap = {
     vehicleType?: { id: string; name: string } | null;
   }[];
   vehicleTypes: { id: string; name: string }[];
+  quickStations: { stationName: string; stationLocation: string }[];
 };
 type FuelEntry = {
   id: string;
@@ -399,7 +400,7 @@ export function FuelWorkspace({
                   driver={bootstrap.driver}
                   vehicles={bootstrap.vehicles}
                   allocation={allocation}
-                  stations={bootstrap.stations}
+                  quickStations={bootstrap.quickStations}
                   saving={saving}
                   error={error}
                   onSubmit={submit}
@@ -434,7 +435,7 @@ export function FuelWorkspace({
                 driver={bootstrap.driver}
                 vehicles={bootstrap.vehicles}
                 allocation={allocation}
-                stations={bootstrap.stations}
+                quickStations={bootstrap.quickStations}
                 saving={saving}
                 error={error}
                 onSubmit={submit}
@@ -1230,7 +1231,7 @@ function DriverFuelEntryForm({
   driver,
   vehicles,
   allocation,
-  stations,
+  quickStations,
   saving,
   error,
   onSubmit,
@@ -1238,7 +1239,7 @@ function DriverFuelEntryForm({
   driver: NonNullable<Bootstrap['driver']>;
   vehicles: Bootstrap['vehicles'];
   allocation?: Bootstrap['activeAllocation'];
-  stations: Bootstrap['stations'];
+  quickStations: Bootstrap['quickStations'];
   saving: boolean;
   error: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1251,12 +1252,12 @@ function DriverFuelEntryForm({
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
   const total = Number(litres || 0) * Number(price || 0);
 
-  function updateStationName(value: string) {
-    setStationName(value);
-    const station = stations.find(
-      (item) => item.name.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
-    );
-    if (station) setStationLocation([station.city, station.state].filter(Boolean).join(', '));
+  function useQuickStation(value: string) {
+    if (!value) return;
+    const station = quickStations[Number(value)];
+    if (!station) return;
+    setStationName(station.stationName);
+    setStationLocation(station.stationLocation);
   }
 
   return (
@@ -1305,35 +1306,33 @@ function DriverFuelEntryForm({
             name="fuelType"
             values={['PMS', 'AGO / Diesel', 'LPG', 'CNG']}
           />
+          {quickStations.length > 0 && (
+            <label className="fuel-field full">
+              <span>Quick entry (optional)</span>
+              <select defaultValue="" onChange={(event) => useQuickStation(event.target.value)}>
+                <option value="">Select a previously entered fuel station</option>
+                {quickStations.map((station, index) => (
+                  <option
+                    key={`${station.stationName}-${station.stationLocation}`}
+                    value={index}
+                  >
+                    {station.stationName} — {station.stationLocation}
+                  </option>
+                ))}
+              </select>
+              <small>Selecting a quick entry fills the station name and location below.</small>
+            </label>
+          )}
           <label className="fuel-field">
             <span>Fuel Station Name</span>
             <input
               name="stationName"
-              list="fuel-entry-stations"
               required
               maxLength={200}
               value={stationName}
-              onChange={(event) => updateStationName(event.target.value)}
-              placeholder="Select or enter fuel station name"
+              onChange={(event) => setStationName(event.target.value)}
+              placeholder="Enter fuel station name"
             />
-            <input
-              type="hidden"
-              name="stationId"
-              value={
-                stations.find(
-                  (station) =>
-                    station.name.trim().toLocaleLowerCase() ===
-                    stationName.trim().toLocaleLowerCase(),
-                )?.id ?? ''
-              }
-            />
-            <datalist id="fuel-entry-stations">
-              {stations.map((station) => (
-                <option key={station.id} value={station.name}>
-                  {[station.city, station.state].filter(Boolean).join(', ')}
-                </option>
-              ))}
-            </datalist>
           </label>
           <label className="fuel-field">
             <span>Fuel station location</span>
