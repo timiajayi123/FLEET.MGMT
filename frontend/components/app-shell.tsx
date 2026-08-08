@@ -78,13 +78,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [router]);
   useEffect(() => {
     if (!user) return;
-    fetch('/api/dashboard?days=30')
-      .then(async (r) => (r.ok ? r.json() : null))
-      .then((p) => {
-        setNotifications(p?.notifications ?? []);
-        setSidebarMetrics(p?.metrics ?? {});
-      })
-      .catch(() => undefined);
+    let active = true;
+    const refreshSidebar = () => {
+      fetch('/api/dashboard?days=30', { cache: 'no-store' })
+        .then(async (response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+          if (!active || !payload) return;
+          setNotifications(payload.notifications ?? []);
+          setSidebarMetrics(payload.metrics ?? {});
+        })
+        .catch(() => undefined);
+    };
+    refreshSidebar();
+    const timer = window.setInterval(refreshSidebar, 30_000);
+    window.addEventListener('focus', refreshSidebar);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshSidebar);
+    };
   }, [user]);
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -557,6 +569,7 @@ function sidebarCount(href: string, roleCode: string | undefined, metrics: Recor
     '/fleet/trips': 'activeTrips',
     '/operations/gps-tracking': 'activeTrips',
     '/operations/maintenance': 'openMaintenance',
+    '/fuel/dashboard': 'pendingFuelEntries',
     '/fuel/operations': 'openFuelAlerts',
   };
   return metrics[metricByPath[href]] ?? 0;

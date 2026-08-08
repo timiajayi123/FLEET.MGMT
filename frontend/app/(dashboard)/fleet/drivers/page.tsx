@@ -15,6 +15,8 @@ type Driver = {
   phone: string;
   email?: string | null;
   status: string;
+  rating?: number | null;
+  ratingCount?: number;
   passportMimeType?: string;
   location?: { id: string; name: string } | null;
   allocations?: Array<{
@@ -107,6 +109,7 @@ export default function DriversPage() {
       sortedItems.map((driver) => {
         return {
           Driver: driver.staffName,
+          'Driver Rating': driver.rating == null ? '' : driver.rating.toFixed(1),
           'Employee ID': driver.employeeId,
           Location: driver.location?.name || driver.locationText || '',
           Email: driver.email || '',
@@ -248,11 +251,12 @@ export default function DriversPage() {
           </div>
         </div>
         <div className="master-table-wrap">
-          <table className="master-table">
+          <table className="master-table driver-master-table">
             <thead>
               <tr>
                 <th>S/N</th>
                 <th>Driver&apos;s Name</th>
+                <th>Driver Rating</th>
                 <th>Location</th>
                 <th>ID Number</th>
                 <th>Email Address</th>
@@ -285,6 +289,19 @@ export default function DriversPage() {
                     >
                       {driver.staffName}
                     </button>
+                  </td>
+                  <td>
+                    <span className="driver-table-rating">
+                      <Star size={14} aria-hidden="true" />
+                      {driver.rating == null ? (
+                        'No rating'
+                      ) : (
+                        <>
+                          <strong>{driver.rating.toFixed(1)}</strong>
+                          <small>({driver.ratingCount ?? 0})</small>
+                        </>
+                      )}
+                    </span>
                   </td>
                   <td>{driver.locationText || '—'}</td>
                   <td>{driver.employeeId}</td>

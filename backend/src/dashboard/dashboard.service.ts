@@ -27,6 +27,7 @@ export class DashboardService {
       activeTrips,
       openMaintenance,
       openFuelAlerts,
+      pendingFuelEntries,
       recent,
       queue,
     ] = await Promise.all([
@@ -46,6 +47,11 @@ export class DashboardService {
       this.prisma.trip.count({ where: { status: 'IN_PROGRESS', requestId: { not: null } } }),
       this.prisma.maintenanceRequest.count({ where: { status: 'PENDING_REVIEW' } }),
       this.prisma.fuelAlert.count({ where: { status: 'OPEN' } }),
+      this.prisma.fuelEntry.count({
+        where: {
+          approvalStatus: { in: ['FLEET_SUPERVISOR_PENDING', 'FLEET_MANAGER_PENDING'] },
+        },
+      }),
       this.prisma.vehicleRequest.findMany({
         where: { createdAt: { gte: since } },
         select: { createdAt: true },
@@ -82,6 +88,7 @@ export class DashboardService {
         activeTrips,
         openMaintenance,
         openFuelAlerts,
+        pendingFuelEntries,
       },
       activity,
       approvalQueue: queue,

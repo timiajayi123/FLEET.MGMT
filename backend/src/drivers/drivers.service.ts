@@ -45,10 +45,18 @@ const select = {
 @Injectable()
 export class DriversService {
   constructor(private prisma: PrismaService) {}
-  list() {
-    return this.prisma.driver.findMany({
-      select,
+  async list() {
+    const drivers = await this.prisma.driver.findMany({
+      select: { ...select, ratings: { select: { stars: true } } },
       orderBy: [{ serialNumber: 'asc' }, { staffName: 'asc' }],
+    });
+    return drivers.map(({ ratings, ...driver }) => {
+      const ratingTotal = ratings.reduce((total, rating) => total + rating.stars, 0);
+      return {
+        ...driver,
+        rating: ratings.length ? ratingTotal / ratings.length : null,
+        ratingCount: ratings.length,
+      };
     });
   }
   async details(id: string) {

@@ -306,12 +306,6 @@ export function FuelWorkspace({
             value={`${metrics.totalLitres?.toFixed?.(1) ?? 0} L`}
           />
           <Kpi
-            icon={Gauge}
-            label="Average efficiency"
-            value={`${metrics.averageConsumption?.toFixed?.(2) ?? 0} km/L`}
-          />
-          <Kpi icon={Fuel} label="Average cost/km" value={money(metrics.averageCostPerKm)} />
-          <Kpi
             icon={AlertTriangle}
             label="Vehicles over baseline"
             value={String(metrics.vehiclesOverBaseline)}
