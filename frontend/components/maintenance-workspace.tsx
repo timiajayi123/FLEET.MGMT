@@ -7,6 +7,8 @@ import {
   LoaderCircle,
   RotateCcw,
   Search,
+  ThumbsDown,
+  ThumbsUp,
   Wrench,
   XCircle,
 } from 'lucide-react';
@@ -32,6 +34,9 @@ type MaintenanceRequest = {
   serviceability?: string | null;
   adminRemark?: string | null;
   reviewedAt?: string | null;
+  driverFeedback?: 'SATISFACTORY' | 'NOT_SATISFACTORY' | null;
+  driverFeedbackRemark?: string | null;
+  driverFeedbackAt?: string | null;
   vehicle: Vehicle;
   reportedBy: { staffName: string; employeeId: string };
   reviewedBy?: { staffName: string } | null;
@@ -47,6 +52,10 @@ export function MaintenanceWorkspace() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<MaintenanceRequest | null>(null);
+  const [feedbackRequest, setFeedbackRequest] = useState<MaintenanceRequest | null>(null);
+  const [feedbackChoice, setFeedbackChoice] = useState<
+    'SATISFACTORY' | 'NOT_SATISFACTORY' | ''
+  >('');
   const [search, setSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -180,6 +189,36 @@ export function MaintenanceWorkspace() {
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to review maintenance request.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openFeedback(request: MaintenanceRequest) {
+    setFeedbackRequest(request);
+    setFeedbackChoice(request.driverFeedback ?? '');
+  }
+
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!feedbackRequest || !feedbackChoice) return;
+    setSaving(true);
+    setError('');
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch(`/api/maintenance/${feedbackRequest.id}/driver-feedback`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback: feedbackChoice, remark: form.get('remark') }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || 'Unable to save your feedback.');
+      setFeedbackRequest(null);
+      setFeedbackChoice('');
+      setMessage('Maintenance feedback saved.');
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save your feedback.');
     } finally {
       setSaving(false);
     }
@@ -346,14 +385,33 @@ export function MaintenanceWorkspace() {
                         </div>
                       </dl>
                       <div className="maintenance-feedback-preview">
-                        <small>Driver feedback</small>
+                        <small>Reported issue</small>
                         <p>{request.issueDescription}</p>
                       </div>
+                      {request.reviewedAt && (
+                        <div className="maintenance-decision-preview">
+                          <small>Fleet decision</small>
+                          <strong>{statusLabel(request.status)}</strong>
+                          {request.adminRemark && <p>{request.adminRemark}</p>}
+                        </div>
+                      )}
+                      {request.driverFeedback && (
+                        <div className={`maintenance-driver-response ${request.driverFeedback.toLowerCase()}`}>
+                          <small>Driver response</small>
+                          <strong>{feedbackLabel(request.driverFeedback)}</strong>
+                          {request.driverFeedbackRemark && <p>{request.driverFeedbackRemark}</p>}
+                        </div>
+                      )}
                       {canReview === true && (
                         <button className="secondary-action" onClick={() => setSelected(request)}>
                           {request.status === 'PENDING_REVIEW'
                             ? 'Open review request'
                             : 'View or change decision'}
+                        </button>
+                      )}
+                      {canReview === false && request.reviewedAt && (
+                        <button className="secondary-action" onClick={() => openFeedback(request)}>
+                          {request.driverFeedback ? 'Update feedback' : 'Give feedback'}
                         </button>
                       )}
                     </article>
@@ -432,9 +490,16 @@ export function MaintenanceWorkspace() {
               </div>
             </dl>
             <section className="maintenance-review-feedback">
-              <small>DRIVER FEEDBACK</small>
+              <small>REPORTED ISSUE</small>
               <p>{selected.issueDescription}</p>
             </section>
+            {selected.driverFeedback && (
+              <section className="maintenance-review-driver-response">
+                <small>DRIVER RESPONSE</small>
+                <strong>{feedbackLabel(selected.driverFeedback)}</strong>
+                {selected.driverFeedbackRemark && <p>{selected.driverFeedbackRemark}</p>}
+              </section>
+            )}
             {selected.evidenceMimeType && (
               <a
                 className="maintenance-evidence review-evidence"
@@ -489,6 +554,65 @@ export function MaintenanceWorkspace() {
                     : selected.status === 'PENDING_REVIEW'
                       ? 'Save maintenance decision'
                       : 'Update maintenance decision'}
+                </button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      )}
+      {feedbackRequest && (
+        <div className="master-modal-backdrop">
+          <section className="maintenance-feedback-modal" role="dialog" aria-modal="true">
+            <header>
+              <div>
+                <small>MAINTENANCE DECISION</small>
+                <h2>Was the decision satisfactory?</h2>
+                <p>{feedbackRequest.vehicle.registrationNumber} · {statusLabel(feedbackRequest.status)}</p>
+              </div>
+              <button onClick={() => setFeedbackRequest(null)} aria-label="Close feedback">
+                <XCircle size={20} />
+              </button>
+            </header>
+            {feedbackRequest.adminRemark && (
+              <div className="maintenance-feedback-decision">
+                <small>Fleet remark</small>
+                <p>{feedbackRequest.adminRemark}</p>
+              </div>
+            )}
+            <form onSubmit={submitFeedback}>
+              <fieldset>
+                <legend>Your response</legend>
+                <div className="maintenance-feedback-options">
+                  <button
+                    type="button"
+                    className={feedbackChoice === 'SATISFACTORY' ? 'active' : ''}
+                    onClick={() => setFeedbackChoice('SATISFACTORY')}
+                  >
+                    <ThumbsUp size={18} /> Satisfactory
+                  </button>
+                  <button
+                    type="button"
+                    className={feedbackChoice === 'NOT_SATISFACTORY' ? 'active negative' : ''}
+                    onClick={() => setFeedbackChoice('NOT_SATISFACTORY')}
+                  >
+                    <ThumbsDown size={18} /> Not satisfactory
+                  </button>
+                </div>
+              </fieldset>
+              <label>
+                <span>Remark (optional)</span>
+                <textarea
+                  name="remark"
+                  rows={4}
+                  maxLength={1000}
+                  defaultValue={feedbackRequest.driverFeedbackRemark ?? ''}
+                  placeholder="Add a short remark if needed"
+                />
+              </label>
+              <footer>
+                <button type="button" className="secondary-action" onClick={() => setFeedbackRequest(null)}>Cancel</button>
+                <button className="primary-action" disabled={saving || !feedbackChoice}>
+                  {saving ? 'Saving...' : 'Save feedback'}
                 </button>
               </footer>
             </form>
@@ -664,4 +788,8 @@ function statusLabel(status: string) {
       OUT_OF_SERVICE: 'Out of service',
     }[status] ?? status.replaceAll('_', ' ')
   );
+}
+
+function feedbackLabel(feedback: 'SATISFACTORY' | 'NOT_SATISFACTORY') {
+  return feedback === 'SATISFACTORY' ? 'Satisfactory' : 'Not satisfactory';
 }

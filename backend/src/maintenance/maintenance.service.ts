@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateMaintenanceRequestDto, ReviewMaintenanceRequestDto } from './maintenance.dto';
+import type {
+  CreateMaintenanceRequestDto,
+  MaintenanceDriverFeedbackDto,
+  ReviewMaintenanceRequestDto,
+} from './maintenance.dto';
 
 type SessionUser = { id: string; employeeId: string; role: { code: string } };
 const MANAGERS = ['S_ADMIN', 'FM'];
@@ -129,6 +133,26 @@ export class MaintenanceService {
           },
           include,
         });
+      }),
+    };
+  }
+
+  async driverFeedback(id: string, dto: MaintenanceDriverFeedbackDto, user: SessionUser) {
+    const request = await this.prisma.maintenanceRequest.findUnique({ where: { id } });
+    if (!request) throw new NotFoundException('Maintenance request not found.');
+    if (request.reportedById !== user.id)
+      throw new BadRequestException('You can only respond to maintenance requests you reported.');
+    if (!request.reviewedAt || request.status === 'PENDING_REVIEW')
+      throw new BadRequestException('Fleet must make a maintenance decision before you respond.');
+    return {
+      data: await this.prisma.maintenanceRequest.update({
+        where: { id },
+        data: {
+          driverFeedback: dto.feedback,
+          driverFeedbackRemark: dto.remark?.trim() || null,
+          driverFeedbackAt: new Date(),
+        },
+        include,
       }),
     };
   }

@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsDateString, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateMaintenanceRequestDto {
   @IsUUID() vehicleId!: string;
@@ -10,4 +10,11 @@ export class CreateMaintenanceRequestDto {
 export class ReviewMaintenanceRequestDto {
   @IsIn(['SERVICEABLE', 'UNSERVICEABLE']) serviceability!: 'SERVICEABLE' | 'UNSERVICEABLE';
   @IsString() @IsNotEmpty() @MaxLength(2000) adminRemark!: string;
+}
+
+export class MaintenanceDriverFeedbackDto {
+  @IsIn(['SATISFACTORY', 'NOT_SATISFACTORY'])
+  feedback!: 'SATISFACTORY' | 'NOT_SATISFACTORY';
+
+  @IsOptional() @IsString() @MaxLength(1000) remark?: string;
 }

@@ -231,6 +231,9 @@ model MaintenanceRequest {
   adminRemark      String?   @db.NVarChar(2000)
   reviewedById     String?   @db.UniqueIdentifier
   reviewedAt       DateTime? @db.DateTime2
+  driverFeedback   String?   @db.NVarChar(30)
+  driverFeedbackRemark String? @db.NVarChar(1000)
+  driverFeedbackAt DateTime? @db.DateTime2
   vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reportedBy       User      @relation("MaintenanceReporter", fields: [reportedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reviewedBy       User?     @relation("MaintenanceReviewer", fields: [reviewedById], references: [id], onDelete: NoAction, onUpdate: NoAction)

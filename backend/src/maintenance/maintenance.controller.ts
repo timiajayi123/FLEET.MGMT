@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import type { Response } from 'express';
 import { AuthService } from '../auth/auth.service';
 import { FLEET_MANAGER_ROLES, requireUser } from '../common/request-auth';
-import { CreateMaintenanceRequestDto, ReviewMaintenanceRequestDto } from './maintenance.dto';
+import { CreateMaintenanceRequestDto, MaintenanceDriverFeedbackDto, ReviewMaintenanceRequestDto } from './maintenance.dto';
 import { MaintenanceService } from './maintenance.service';
 
 @Controller('maintenance')
@@ -18,4 +18,5 @@ export class MaintenanceController {
   @Get(':id/evidence')
   async evidence(@Param('id') id: string, @Req() req: Request, @Res() res: Response) { await requireUser(this.auth, req, ['S_ADMIN', 'FM', 'DRIVER']); const evidence = await this.maintenance.evidence(id); res.type(evidence.evidenceMimeType!).send(Buffer.from(evidence.evidenceData!)); }
   @Patch(':id/review') async review(@Req() req: Request, @Param('id') id: string, @Body() dto: ReviewMaintenanceRequestDto) { return this.maintenance.review(id, dto, await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES])); }
+  @Patch(':id/driver-feedback') async driverFeedback(@Req() req: Request, @Param('id') id: string, @Body() dto: MaintenanceDriverFeedbackDto) { return this.maintenance.driverFeedback(id, dto, await requireUser(this.auth, req, ['DRIVER'])); }
 }

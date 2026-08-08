@@ -212,21 +212,21 @@ function StaffDashboard({ data }: { data: DashboardData }) {
     {
       label: 'My requests',
       value: data.metrics.totalRequests ?? 0,
-      note: 'All transport requests submitted by you',
+      note: 'Requests you submitted',
       icon: ClipboardList,
       tone: 'green',
     },
     {
       label: 'Approved by fleet',
       value: approvedByFleet,
-      note: 'Approved, assigned, or completed',
+      note: 'Approved or assigned',
       icon: CheckCircle2,
       tone: 'blue',
     },
     {
       label: 'Trips completed',
       value: data.metrics.completedRequests ?? 0,
-      note: 'Completed transport trips',
+      note: 'Finished trips',
       icon: Route,
       tone: 'purple',
     },
@@ -239,11 +239,11 @@ function StaffDashboard({ data }: { data: DashboardData }) {
         <article className="panel">
           <div className="panel-heading">
             <div>
-              <h2>{currentTransport ? 'Current transport assignment' : 'Latest request update'}</h2>
+              <h2>{currentTransport ? 'Current transport' : 'Latest request'}</h2>
               <p>
                 {currentTransport
-                  ? 'Your approved transport, driver and vehicle details.'
-                  : 'Your most recent transport request.'}
+                  ? 'Your driver and vehicle details.'
+                  : 'Your latest vehicle request.'}
               </p>
             </div>
           </div>
@@ -261,7 +261,7 @@ function StaffDashboard({ data }: { data: DashboardData }) {
           <div className="panel-heading">
             <div>
               <h2>My requests</h2>
-              <p>Simple status history for your transport requests.</p>
+              <p>See the status of your requests.</p>
             </div>
           </div>
           {data.myRequests?.length ? (
@@ -287,7 +287,7 @@ function StaffDashboard({ data }: { data: DashboardData }) {
             <Empty
               icon={<ClipboardList size={28} />}
               title="No requests yet"
-              text="Submit a vehicle request to begin the approval workflow."
+              text="Submit a vehicle request to get started."
             />
           )}
         </article>
@@ -435,7 +435,7 @@ function StaffRequestUpdate({ request }: { request: StaffRequest }) {
           <span>Destination</span>
           {request.destination}
         </p>
-        <small>Fleet will add a driver and vehicle once transport is assigned.</small>
+        <small>A driver and vehicle will appear here after assignment.</small>
       </div>
     );
   return (
@@ -723,6 +723,6 @@ function staffStatusLabel(status: string) {
 function description(roleCode?: string) {
   if (roleCode === 'DRIVER')
     return 'Your approved request-backed assignments, completed trips and live trip status.';
-  if (roleCode === 'ST') return 'Your vehicle request status and transport updates.';
+  if (roleCode === 'ST') return 'Your vehicle requests and transport details.';
   return 'Fleet requests, allocations, trips and operational activity.';
 }

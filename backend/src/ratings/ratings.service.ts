@@ -75,16 +75,11 @@ export class RatingsService {
     });
     const ratedDrivers = driverRatings.filter((driver) => driver.ratingCount > 0);
     const totalRatings = ratedDrivers.reduce((sum, driver) => sum + driver.ratingCount, 0);
-    const ratingTotal = ratedDrivers.reduce(
-      (sum, driver) => sum + Number(driver.rating) * driver.ratingCount,
-      0,
-    );
     return {
       metrics: {
         totalDrivers: driverRatings.length,
         ratedDrivers: ratedDrivers.length,
         totalRatings,
-        averageRating: totalRatings ? ratingTotal / totalRatings : null,
       },
       drivers: driverRatings,
       recentRatings,
