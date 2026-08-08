@@ -439,7 +439,7 @@ export function MaintenanceWorkspace({ view = 'workspace' }: { view?: 'workspace
                       <header>
                         <strong>{request.issueType}</strong>
                         <span className={`maintenance-status ${request.status.toLowerCase()}`}>
-                          {statusLabel(request.status)}
+                          {maintenanceStatusLabel(request)}
                         </span>
                       </header>
                       <dl className="maintenance-request-summary-grid">
@@ -891,6 +891,12 @@ function statusLabel(status: string) {
       OUT_OF_SERVICE: 'Out of service',
     }[status] ?? status.replaceAll('_', ' ')
   );
+}
+
+function maintenanceStatusLabel(request: MaintenanceRequest) {
+  if (request.driverFeedback === 'SATISFACTORY') return 'Maintenance satisfactory';
+  if (request.driverFeedback === 'NOT_SATISFACTORY') return 'Maintenance not satisfactory';
+  return statusLabel(request.status);
 }
 
 function feedbackLabel(feedback: 'SATISFACTORY' | 'NOT_SATISFACTORY') {
