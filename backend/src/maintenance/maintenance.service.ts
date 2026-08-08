@@ -23,6 +23,26 @@ const include = {
   reportedBy: { select: { staffName: true, employeeId: true } },
   reviewedBy: { select: { staffName: true } },
 } as const;
+const listSelect = {
+  id: true,
+  vehicleId: true,
+  reportedById: true,
+  issueType: true,
+  issueDescription: true,
+  issueOccurredAt: true,
+  evidenceMimeType: true,
+  status: true,
+  serviceability: true,
+  adminRemark: true,
+  reviewedById: true,
+  reviewedAt: true,
+  driverFeedback: true,
+  driverFeedbackRemark: true,
+  driverFeedbackAt: true,
+  createdAt: true,
+  updatedAt: true,
+  ...include,
+} as const;
 
 @Injectable()
 export class MaintenanceService {
@@ -33,7 +53,7 @@ export class MaintenanceService {
     return {
       data: await this.prisma.maintenanceRequest.findMany({
         where,
-        include,
+        select: listSelect,
         orderBy: { createdAt: 'desc' },
         take: 200,
       }),

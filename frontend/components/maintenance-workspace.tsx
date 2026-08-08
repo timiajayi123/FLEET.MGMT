@@ -64,6 +64,7 @@ export function MaintenanceWorkspace() {
   const [issueFilter, setIssueFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [serviceFilter, setServiceFilter] = useState('');
+  const [showAllReports, setShowAllReports] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +138,7 @@ export function MaintenanceWorkspace() {
     toDate,
     vehicleFilter,
   ]);
+  const visibleRequests = showAllReports ? filteredRequests : filteredRequests.slice(0, 2);
 
   function clearFilters() {
     setSearch('');
@@ -215,7 +217,7 @@ export function MaintenanceWorkspace() {
       if (!response.ok) throw new Error(payload.message || 'Unable to save your feedback.');
       setFeedbackRequest(null);
       setFeedbackChoice('');
-      setMessage('Maintenance feedback saved.');
+      setMessage('Maintenance feedback sent.');
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to save your feedback.');
@@ -357,8 +359,9 @@ export function MaintenanceWorkspace() {
                 />
               )}
               {filteredRequests.length ? (
+                <>
                 <div className="maintenance-request-list">
-                  {filteredRequests.map((request) => (
+                  {visibleRequests.map((request) => (
                     <article key={request.id}>
                       <header>
                         <strong>{request.issueType}</strong>
@@ -417,6 +420,18 @@ export function MaintenanceWorkspace() {
                     </article>
                   ))}
                 </div>
+                {filteredRequests.length > 2 && (
+                  <button
+                    type="button"
+                    className="secondary-action maintenance-show-reports"
+                    onClick={() => setShowAllReports((current) => !current)}
+                  >
+                    {showAllReports
+                      ? 'Show only recent reports'
+                      : `Show all reports (${filteredRequests.length})`}
+                  </button>
+                )}
+                </>
               ) : (
                 <div className="master-empty">
                   <Wrench size={28} />
@@ -612,7 +627,7 @@ export function MaintenanceWorkspace() {
               <footer>
                 <button type="button" className="secondary-action" onClick={() => setFeedbackRequest(null)}>Cancel</button>
                 <button className="primary-action" disabled={saving || !feedbackChoice}>
-                  {saving ? 'Saving...' : 'Save feedback'}
+                  {saving ? 'Sending...' : 'Send feedback'}
                 </button>
               </footer>
             </form>
