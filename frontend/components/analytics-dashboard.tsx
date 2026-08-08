@@ -1,8 +1,10 @@
 'use client';
 
 import { PageHeader } from './page-header';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Award,
   CarFront,
   ClipboardList,
   Gauge,
@@ -31,10 +33,30 @@ type SpeedData = {
   trend: { recordedAt: string; speed: number; driver?: string; vehicle?: string }[];
   violations: unknown[];
 };
+type DriverPerformanceData = {
+  summary: {
+    totalDrivers: number;
+    activeDrivers: number;
+    completionRate: number;
+    averageRating: number | null;
+    safetyScore: number;
+  };
+  data: {
+    id: string;
+    staffName: string;
+    employeeId: string;
+    allocatedTrips: number;
+    completedTrips: number;
+    averageRating: number | null;
+    violations: number;
+    performanceScore: number;
+  }[];
+};
 
 export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [speed, setSpeed] = useState<SpeedData | null>(null);
+  const [driverPerformance, setDriverPerformance] = useState<DriverPerformanceData | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState('30');
@@ -49,19 +71,28 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
     const query = `from=${encodeURIComponent(from.toISOString())}`;
     Promise.all([
       fetch(`/api/analytics/dashboard?${query}`, { signal: controller.signal }),
+      fetch(`/api/analytics/reports/driver-performance?${query}`, { signal: controller.signal }),
       fetch(`/api/analytics/speed?${query}&threshold=100`, { signal: controller.signal }),
     ])
-      .then(async ([dashboardResponse, speedResponse]) => {
+      .then(async ([dashboardResponse, performanceResponse, speedResponse]) => {
         const dashboardBody = await dashboardResponse.json();
+        const performanceBody = await performanceResponse.json();
         const speedBody = await speedResponse.json();
         if (!dashboardResponse.ok)
           throw new Error(dashboardBody.message || 'Unable to load analytics.');
         if (!speedResponse.ok)
           throw new Error(speedBody.message || 'Unable to load speed analytics.');
-        return [dashboardBody as Dashboard, speedBody as SpeedData] as const;
+        if (!performanceResponse.ok)
+          throw new Error(performanceBody.message || 'Unable to load driver performance.');
+        return [
+          dashboardBody as Dashboard,
+          performanceBody as DriverPerformanceData,
+          speedBody as SpeedData,
+        ] as const;
       })
-      .then(([dashboard, speedData]) => {
+      .then(([dashboard, performanceData, speedData]) => {
         setData(dashboard);
+        setDriverPerformance(performanceData);
         setSpeed(speedData);
       })
       .catch((reason) => {
@@ -166,6 +197,7 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
             </section>
           </section>
           <section className="analytics-chart-grid">
+            <DriverPerformancePanel performance={driverPerformance} />
             <LineChart
               title="Speed and overspeed trend"
               description="Individual GPS speed readings with the overspeed threshold clearly marked."
@@ -209,6 +241,54 @@ export function AnalyticsDashboard({ embedded = false }: { embedded?: boolean })
         </>
       )}
     </section>
+  );
+}
+
+function DriverPerformancePanel({
+  performance,
+}: {
+  performance: DriverPerformanceData | null;
+}) {
+  const summary = performance?.summary;
+  const rows = performance?.data.slice(0, 5) ?? [];
+  return (
+    <article className="panel driver-performance-panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Driver performance</h2>
+          <p>Trip completion, staff ratings and safe-driving results for the selected period.</p>
+        </div>
+        <span className="driver-performance-heading-actions">
+          <Award size={20} />
+          <Link href="/analytics/reports?report=driver-performance">Open report</Link>
+        </span>
+      </div>
+      <section className="driver-performance-summary">
+        <div><small>Active drivers</small><strong>{summary?.activeDrivers ?? 0}</strong></div>
+        <div><small>Completion rate</small><strong>{(summary?.completionRate ?? 0).toFixed(1)}%</strong></div>
+        <div><small>Average rating</small><strong>{summary?.averageRating ? `${summary.averageRating.toFixed(1)} / 5` : 'Not rated'}</strong></div>
+        <div><small>Safety score</small><strong>{(summary?.safetyScore ?? 100).toFixed(1)}%</strong></div>
+      </section>
+      {rows.length ? (
+        <div className="driver-performance-list">
+          {rows.map((driver, index) => (
+            <div key={driver.id}>
+              <span className="driver-performance-rank">{index + 1}</span>
+              <span className="driver-performance-name">
+                <strong>{driver.staffName}</strong>
+                <small>{driver.employeeId}</small>
+              </span>
+              <span><small>Trips</small><strong>{driver.completedTrips}/{driver.allocatedTrips}</strong></span>
+              <span><small>Rating</small><strong>{driver.averageRating ? driver.averageRating.toFixed(1) : '—'}</strong></span>
+              <span><small>Violations</small><strong>{driver.violations}</strong></span>
+              <span className="driver-performance-score"><small>Score</small><strong>{driver.performanceScore.toFixed(1)}%</strong></span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-compact">No driver performance activity exists for this period.</p>
+      )}
+    </article>
   );
 }
 

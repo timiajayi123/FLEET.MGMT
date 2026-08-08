@@ -108,16 +108,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       ).toUpperCase();
       const url =
         typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      const requestHeaders = new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      );
       if (
         response.ok &&
         ['POST', 'PATCH', 'PUT', 'DELETE'].includes(method) &&
         !silentPaths.some((path) => url.includes(path))
       ) {
-        const message = url.includes('/vehicle-requests')
-          ? 'Vehicle request submitted successfully.'
-          : url.includes('/fuel/entries')
-            ? 'Fuel record submitted successfully.'
-            : 'Request completed successfully.';
+        const message =
+          requestHeaders.get('X-Fleet-Success-Message') ?? mutationSuccessMessage(url, method);
         setGlobalNotice(message);
       }
       return response;
@@ -479,6 +479,28 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
     </div>
   );
+}
+
+function mutationSuccessMessage(url: string, method: string) {
+  if (url.includes('/vehicle-requests'))
+    return method === 'POST'
+      ? 'Vehicle request submitted successfully.'
+      : 'Vehicle request updated successfully.';
+  if (url.includes('/fuel/entries'))
+    return method === 'POST'
+      ? 'Fuel record submitted successfully.'
+      : 'Fuel record updated successfully.';
+  if (url.includes('/maintenance') && url.includes('/driver-feedback'))
+    return 'Maintenance feedback sent successfully.';
+  if (url.includes('/maintenance') && url.includes('/review'))
+    return 'Maintenance decision saved successfully.';
+  if (url.includes('/maintenance'))
+    return method === 'POST'
+      ? 'Maintenance report submitted successfully.'
+      : 'Maintenance record updated successfully.';
+  if (method === 'DELETE') return 'Record deleted successfully.';
+  if (method === 'POST') return 'Record submitted successfully.';
+  return 'Changes saved successfully.';
 }
 
 type GlobalSearchResult = {

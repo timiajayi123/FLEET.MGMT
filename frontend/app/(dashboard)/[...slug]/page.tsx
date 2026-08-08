@@ -21,7 +21,6 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (path === '/fuel/dashboard') return <FuelWorkspace view="dashboard" />;
   if (path === '/fuel/history') return <FuelWorkspace view="history" />;
   if (path === '/fuel/cards') return <FuelWorkspace view="cards" />;
-  if (path === '/fuel/stations') return <FuelWorkspace view="stations" />;
   if (path === '/ai/fleet-optimization') return <FleetAssistant />;
 
   return (

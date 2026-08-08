@@ -326,6 +326,137 @@ export class AnalyticsService {
     return { total: rows.length, data: rows };
   }
 
+  async driverPerformance(filters: AnalyticsFilters) {
+    const driverWhere = {
+      ...(filters.driverId ? { id: filters.driverId } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.search
+        ? {
+            OR: [
+              { staffName: { contains: filters.search } },
+              { employeeId: { contains: filters.search } },
+            ],
+          }
+        : {}),
+    };
+    const [drivers, tripGroups, ratingGroups, violationGroups] = await Promise.all([
+      this.prisma.driver.findMany({
+        where: driverWhere,
+        select: {
+          id: true,
+          staffName: true,
+          employeeId: true,
+          status: true,
+          locationText: true,
+          location: { select: { name: true } },
+        },
+        orderBy: { staffName: 'asc' },
+      }),
+      this.prisma.trip.groupBy({
+        by: ['driverId', 'status'],
+        where: {
+          requestId: { not: null },
+          createdAt: dateRange(filters),
+          ...(filters.driverId ? { driverId: filters.driverId } : {}),
+        },
+        _count: { _all: true },
+        _sum: { calculatedDistance: true },
+      }),
+      this.prisma.driverRating.groupBy({
+        by: ['driverId'],
+        where: {
+          createdAt: dateRange(filters),
+          ...(filters.driverId ? { driverId: filters.driverId } : {}),
+        },
+        _count: { _all: true },
+        _avg: { stars: true },
+      }),
+      this.prisma.speedViolation.groupBy({
+        by: ['driverId', 'severity'],
+        where: {
+          driverId: { not: null },
+          startedAt: dateRange(filters),
+          ...(filters.driverId ? { driverId: filters.driverId } : {}),
+        },
+        _count: { _all: true },
+      }),
+    ]);
+    const ratings = new Map(
+      ratingGroups.map((row) => [
+        row.driverId,
+        { average: row._avg.stars, count: row._count._all },
+      ]),
+    );
+    const severityWeights: Record<string, number> = {
+      LOW: 1,
+      MEDIUM: 3,
+      HIGH: 6,
+      CRITICAL: 10,
+    };
+    const rows = drivers.map((driver) => {
+      const driverTrips = tripGroups.filter((row) => row.driverId === driver.id);
+      const allocatedTrips = driverTrips.reduce((sum, row) => sum + row._count._all, 0);
+      const completedTrips = driverTrips
+        .filter((row) => row.status === 'COMPLETED')
+        .reduce((sum, row) => sum + row._count._all, 0);
+      const totalDistance = driverTrips.reduce(
+        (sum, row) => sum + Number(row._sum.calculatedDistance ?? 0),
+        0,
+      );
+      const driverViolations = violationGroups.filter((row) => row.driverId === driver.id);
+      const violations = driverViolations.reduce((sum, row) => sum + row._count._all, 0);
+      const violationPenalty = driverViolations.reduce(
+        (sum, row) => sum + row._count._all * (severityWeights[row.severity] ?? 1),
+        0,
+      );
+      const completionRate = allocatedTrips ? (completedTrips / allocatedTrips) * 100 : 0;
+      const safetyScore = Math.max(0, 100 - violationPenalty);
+      const rating = ratings.get(driver.id);
+      const ratingScore = rating?.average ? (rating.average / 5) * 100 : completionRate;
+      const performanceScore =
+        allocatedTrips || rating?.count
+          ? completionRate * 0.5 + ratingScore * 0.3 + safetyScore * 0.2
+          : 0;
+      return {
+        ...driver,
+        location: driver.location?.name ?? driver.locationText ?? 'Not set',
+        allocatedTrips,
+        completedTrips,
+        completionRate: round(completionRate, 1),
+        totalDistance: round(totalDistance, 2),
+        averageRating: rating?.average ? round(rating.average, 1) : null,
+        ratingCount: rating?.count ?? 0,
+        violations,
+        safetyScore: round(safetyScore, 1),
+        performanceScore: round(performanceScore, 1),
+      };
+    }).sort((first, second) =>
+      second.performanceScore - first.performanceScore ||
+      second.completedTrips - first.completedTrips ||
+      first.staffName.localeCompare(second.staffName),
+    );
+    const activeRows = rows.filter((row) => row.allocatedTrips > 0);
+    const totalAllocated = rows.reduce((sum, row) => sum + row.allocatedTrips, 0);
+    const totalCompleted = rows.reduce((sum, row) => sum + row.completedTrips, 0);
+    const totalRatings = rows.reduce((sum, row) => sum + row.ratingCount, 0);
+    const weightedRating = rows.reduce(
+      (sum, row) => sum + (row.averageRating ?? 0) * row.ratingCount,
+      0,
+    );
+    return {
+      summary: {
+        totalDrivers: rows.length,
+        activeDrivers: activeRows.length,
+        completionRate: round(totalAllocated ? (totalCompleted / totalAllocated) * 100 : 0, 1),
+        averageRating: totalRatings ? round(weightedRating / totalRatings, 1) : null,
+        safetyScore: activeRows.length
+          ? round(activeRows.reduce((sum, row) => sum + row.safetyScore, 0) / activeRows.length, 1)
+          : 100,
+      },
+      data: rows,
+    };
+  }
+
   async latestTripSummary() {
     const trip = await this.prisma.trip.findFirst({
       where: { requestId: { not: null } },
@@ -380,4 +511,8 @@ function groupByDate(rows: { date: Date; value: number }[]) {
   return [...map]
     .map(([date, value]) => ({ date, value }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+function round(value: number, decimals: number) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }

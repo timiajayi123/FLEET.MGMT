@@ -6,7 +6,6 @@ import {
   DecisionDto,
   FuelCardDto,
   FuelPriceDto,
-  StationDto,
 } from './fuel.dto';
 
 type SessionUser = {
@@ -78,21 +77,7 @@ export class FuelService {
           },
         })
       : null;
-    const [stations, cards, vehicles, vehicleTypes, recentManualStations] = await Promise.all([
-      this.prisma.fuelStation.findMany({
-        where: { status: 'ACTIVE' },
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          brand: true,
-          address: true,
-          state: true,
-          city: true,
-          contact: true,
-          status: true,
-        },
-      }),
+    const [cards, vehicles, vehicleTypes, recentManualStations] = await Promise.all([
       manager
         ? this.prisma.fuelCard.findMany({
             where: { status: 'ACTIVE' },
@@ -172,7 +157,6 @@ export class FuelService {
         canManage: manager,
         driver,
         activeAllocation,
-        stations,
         cards,
         vehicles,
         vehicleTypes,
@@ -207,10 +191,10 @@ export class FuelService {
     const approvedPrice = await this.prisma.fuelPrice.findFirst({
       where: {
         fuelType: dto.fuelType,
-        state: dto.state ?? context.station?.state ?? '',
+        state: dto.state ?? '',
         status: 'ACTIVE',
         effectiveDate: { lte: new Date(dto.fuelingAt) },
-        OR: [{ stationId: context.station?.id }, { stationId: null }],
+        stationId: null,
       },
       orderBy: { effectiveDate: 'desc' },
     });
@@ -271,9 +255,9 @@ export class FuelService {
           allocationId: context.allocation?.id ?? null,
           tripId: context.trip?.id ?? null,
           createdById: user.id,
-          stationId: context.station?.id ?? null,
+          stationId: null,
           fuelCardId: dto.fuelCardId ?? null,
-          vendorId: context.station?.vendorId ?? null,
+          vendorId: null,
           fuelingAt: new Date(dto.fuelingAt),
           entryType: dto.entryType || 'REFUEL',
           fuelType: dto.fuelType,
@@ -295,8 +279,8 @@ export class FuelService {
           officeName: user.locationId ? await this.nameOf('location', user.locationId) : null,
           unitName: null,
           supervisorName: context.allocation?.assignedBy?.staffName ?? null,
-          state: dto.state ?? context.station?.state ?? null,
-          city: dto.city ?? context.station?.city ?? null,
+          state: dto.state ?? null,
+          city: dto.city ?? null,
           stationName: dto.stationName,
           stationLocation: dto.stationLocation,
           pumpNumber: dto.pumpNumber || null,
@@ -627,19 +611,6 @@ export class FuelService {
     await this.audit(user.id, 'CREATED', 'FuelCard', card.id);
     return { data: card };
   }
-  async stations() {
-    return {
-      data: await this.prisma.fuelStation.findMany({
-        include: { vendor: true, prices: { orderBy: { effectiveDate: 'desc' }, take: 1 } },
-        orderBy: { name: 'asc' },
-      }),
-    };
-  }
-  async createStation(dto: StationDto, user: SessionUser) {
-    const station = await this.prisma.fuelStation.create({ data: dto });
-    await this.audit(user.id, 'CREATED', 'FuelStation', station.id);
-    return { data: station };
-  }
   async createPrice(dto: FuelPriceDto, user: SessionUser) {
     const price = await this.prisma.fuelPrice.create({
       data: { ...dto, effectiveDate: new Date(dto.effectiveDate) },
@@ -700,10 +671,6 @@ export class FuelService {
         ? await this.prisma.vehicle.findUnique({ where: { id: dto.vehicleId } })
         : null);
     if (!vehicle) throw new NotFoundException('Vehicle not found.');
-    const station = dto.stationId
-      ? await this.prisma.fuelStation.findUnique({ where: { id: dto.stationId } })
-      : null;
-    if (dto.stationId && !station) throw new NotFoundException('Fuel station not found.');
     return {
       allocation,
       vehicle,
@@ -711,7 +678,6 @@ export class FuelService {
       trip: dto.tripId
         ? await this.prisma.trip.findUnique({ where: { id: dto.tripId } })
         : (allocation?.trip ?? null),
-      station,
     };
   }
 
@@ -780,7 +746,7 @@ export class FuelService {
         input.context,
         input.total,
         input.dto.fuelType,
-        input.dto.state ?? input.context.station?.state ?? '',
+        input.dto.state ?? '',
       );
     return alerts;
   }

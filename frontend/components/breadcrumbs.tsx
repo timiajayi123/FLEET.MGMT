@@ -27,6 +27,7 @@ export function Breadcrumbs() {
       requests: 'Vehicle Request Report',
       trips: 'Trip Report',
       drivers: 'Driver Activity Report',
+      'driver-performance': 'Driver Performance Report',
       speed: 'Speed Violation Report',
       utilisation: 'Vehicle Utilisation Report',
       maintenance: 'Maintenance Report',

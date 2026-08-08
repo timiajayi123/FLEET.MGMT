@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Award,
   BarChart3,
   CarFront,
   ChevronLeft,
@@ -16,7 +17,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from './page-header';
 
 type ReportKind =
-  'requests' | 'trips' | 'drivers' | 'speed' | 'utilisation' | 'maintenance' | 'fuel';
+  | 'requests'
+  | 'trips'
+  | 'drivers'
+  | 'driver-performance'
+  | 'speed'
+  | 'utilisation'
+  | 'maintenance'
+  | 'fuel';
 type Row = Record<string, unknown>;
 type DisplayRow = Record<string, string | number>;
 type ReportVehicle = {
@@ -52,6 +60,13 @@ const reports: {
     title: 'Driver Activity Report',
     description: 'Driver trip participation and completed-trip counts.',
     icon: Users,
+    available: true,
+  },
+  {
+    kind: 'driver-performance',
+    title: 'Driver Performance Report',
+    description: 'Trip completion, distance, ratings and safe-driving performance by driver.',
+    icon: Award,
     available: true,
   },
   {
@@ -218,7 +233,6 @@ function ReportDetail({
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search report"
           />
-          {report.kind !== 'fuel' && <DateRangeControls duration={duration} changeDuration={changeDuration} from={from} to={to} setFrom={setFrom} setTo={setTo} />}
           {report.kind === 'requests' && (
             <>
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -249,6 +263,15 @@ function ReportDetail({
             <select value={extraFilters.reportedById ?? ''} onChange={(event) => setExtraFilters((current) => ({ ...current, reportedById: event.target.value }))}><option value="">All reporters</option>{peopleFromRows(rows, 'reportedBy').map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select>
             <select value={extraFilters.reviewedById ?? ''} onChange={(event) => setExtraFilters((current) => ({ ...current, reviewedById: event.target.value }))}><option value="">All reviewers</option>{peopleFromRows(rows, 'reviewedBy').map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select>
           </>}
+          {report.kind === 'driver-performance' && (
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="">All driver statuses</option>
+              <option value="AVAILABLE">Available</option>
+              <option value="ASSIGNED">Assigned</option>
+              <option value="ON_LEAVE">On leave</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+          )}
           <DateRangeControls duration={duration} changeDuration={changeDuration} from={from} to={to} setFrom={setFrom} setTo={setTo} />
           {report.kind === 'fuel' && (
             <>
@@ -296,6 +319,7 @@ function endpointFor(kind: ReportKind, status: string, search: string, from: str
   if (kind === 'fuel') return `/api/fuel/comparison?${params}`;
   if (kind === 'requests') return `/api/analytics/reports/vehicle-requests?${params}`;
   if (kind === 'maintenance') return `/api/analytics/reports/maintenance?${params}`;
+  if (kind === 'driver-performance') return `/api/analytics/reports/driver-performance?${params}`;
   if (kind === 'trips' || kind === 'drivers') return `/api/trips?${params}`;
   if (kind === 'speed') return '/api/analytics/speed?threshold=100';
   return '/api/analytics/dashboard';
@@ -303,7 +327,7 @@ function endpointFor(kind: ReportKind, status: string, search: string, from: str
 function normalise(kind: ReportKind, payload: Record<string, unknown>): Row[] {
   if (kind === 'fuel')
     return (payload.data as { fuelEntries?: Row[] } | undefined)?.fuelEntries ?? [];
-  if (kind === 'requests' || kind === 'trips' || kind === 'maintenance')
+  if (kind === 'requests' || kind === 'trips' || kind === 'maintenance' || kind === 'driver-performance')
     return (payload.data as Row[] | undefined) ?? [];
   if (kind === 'speed') return (payload.violations as Row[] | undefined) ?? [];
   if (kind === 'drivers') {
@@ -402,6 +426,24 @@ function formatRows(kind: ReportKind, rows: Row[]): DisplayRow[] {
         'DESTINATION TO': cell((row.request as { destination?: string; customDestination?: string } | undefined)?.customDestination ?? (row.request as { destination?: string } | undefined)?.destination ?? row.destination ?? row.customDestination ?? (row.allocation as { destination?: string } | undefined)?.destination),
         Started: dateTime(row.startedAt),
         Ended: dateTime(row.endedAt),
+      };
+    }
+    if (kind === 'driver-performance') {
+      return {
+        'S/N': index + 1,
+        DRIVER: cell(row.staffName),
+        'DRIVER ID': cell(row.employeeId),
+        LOCATION: cell(row.location),
+        STATUS: String(cell(row.status)).replaceAll('_', ' '),
+        'ALLOCATED TRIPS': cell(row.allocatedTrips),
+        'COMPLETED TRIPS': cell(row.completedTrips),
+        'COMPLETION RATE': `${Number(row.completionRate ?? 0).toFixed(1)}%`,
+        'DISTANCE/KM': Number(row.totalDistance ?? 0).toFixed(2),
+        RATING: row.averageRating ? `${Number(row.averageRating).toFixed(1)} / 5` : 'Not rated',
+        'RATING COUNT': cell(row.ratingCount),
+        'SPEED VIOLATIONS': cell(row.violations),
+        'SAFETY SCORE': `${Number(row.safetyScore ?? 0).toFixed(1)}%`,
+        'PERFORMANCE SCORE': `${Number(row.performanceScore ?? 0).toFixed(1)}%`,
       };
     }
     if (kind === 'speed') {

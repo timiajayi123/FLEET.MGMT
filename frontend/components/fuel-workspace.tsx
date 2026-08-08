@@ -10,7 +10,6 @@ import {
   Fuel,
   Gauge,
   GitCompareArrows,
-  MapPin,
   Plus,
   ReceiptText,
   Send,
@@ -35,16 +34,6 @@ type Bootstrap = {
     driver: { id: string; staffName: string; employeeId: string };
     trip?: { id: string; status: string; calculatedDistance?: number | null } | null;
   } | null;
-  stations: {
-    id: string;
-    name: string;
-    brand?: string | null;
-    address?: string | null;
-    state: string;
-    city?: string | null;
-    contact?: string | null;
-    status?: string;
-  }[];
   cards: {
     id: string;
     maskedNumber: string;
@@ -129,7 +118,7 @@ type FuelDashboard = {
 export function FuelWorkspace({
   view = 'operations',
 }: {
-  view?: 'dashboard' | 'operations' | 'history' | 'cards' | 'stations';
+  view?: 'dashboard' | 'operations' | 'history' | 'cards';
 }) {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [entries, setEntries] = useState<FuelEntry[]>([]);
@@ -255,9 +244,7 @@ export function FuelWorkspace({
         ? 'Fuel History'
       : view === 'cards'
         ? 'Fuel Coupons'
-      : view === 'stations'
-          ? 'Fuel Stations'
-          : bootstrap?.canManage
+      : bootstrap?.canManage
             ? 'Fuel Operations'
             : 'Fuel Entry';
   return (
@@ -482,9 +469,6 @@ export function FuelWorkspace({
       )}
       {bootstrap?.canManage && view === 'cards' && (
         <FuelCardsPanel cards={bootstrap.cards} vehicles={bootstrap.vehicles} onCreated={load} />
-      )}
-      {bootstrap?.canManage && view === 'stations' && (
-        <FuelStationsPanel stations={bootstrap.stations} onCreated={load} />
       )}
       {selected && (
         <div className="master-modal-backdrop">
@@ -1411,13 +1395,11 @@ function DriverFuelEntryForm({
 
 export function FuelEntryForm({
   allocation,
-  stations,
   cards,
   saving,
   onSubmit,
 }: {
   allocation: NonNullable<Bootstrap['activeAllocation']>;
-  stations: Bootstrap['stations'];
   cards: Bootstrap['cards'];
   saving: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1481,14 +1463,6 @@ export function FuelEntryForm({
       <details open>
         <summary>Fuel, payment & evidence</summary>
         <div className="fuel-fields">
-          <Select
-            label="Fuel station"
-            name="stationId"
-            values={stations.map((station) => `${station.id}|${station.name} · ${station.state}`)}
-            optionValue={(value) => value.split('|')[0]}
-            optionLabel={(value) => value.split('|')[1]}
-            required={false}
-          />
           <Field label="State" name="state" required={false} placeholder="State" />
           <Field label="City" name="city" required={false} placeholder="City" />
           <Field label="Pump number" name="pumpNumber" required={false} placeholder="Pump" />
@@ -1767,76 +1741,6 @@ function FuelCardsPanel({
           <Gauge size={20} />
         </div>
         <BaselineForm vehicles={vehicles} onCreated={onCreated} />
-      </article>
-    </section>
-  );
-}
-function FuelStationsPanel({
-  stations,
-  onCreated,
-}: {
-  stations: Bootstrap['stations'];
-  onCreated: () => void;
-}) {
-  return (
-    <section className="fuel-management-grid fuel-stations-grid">
-      <article className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Add fuel station</h2>
-            <p>Register an approved fuel station and its location.</p>
-          </div>
-          <MapPin size={20} />
-        </div>
-        <SimpleForm
-          endpoint="/api/fuel/stations"
-          fields={[
-            ['name', 'Station name'],
-            ['brand', 'Brand'],
-            ['state', 'State'],
-            ['city', 'City'],
-            ['address', 'Address'],
-          ]}
-          onCreated={onCreated}
-        />
-        <section className="fuel-station-directory">
-          <header>
-            <div>
-              <h3>Existing fuel stations</h3>
-              <p>Approved stations currently available on fuel entry forms.</p>
-            </div>
-            <span>{stations.length} {stations.length === 1 ? 'station' : 'stations'}</span>
-          </header>
-          {stations.length ? (
-            <div className="fuel-station-list">
-              {stations.map((station) => (
-                <article key={station.id}>
-                  <div className="fuel-station-icon"><Fuel size={19} /></div>
-                  <div className="fuel-station-main">
-                    <small>{station.brand || 'Independent station'}</small>
-                    <h4>{station.name}</h4>
-                    <p>
-                      <MapPin size={13} />
-                      {station.address || [station.city, station.state].filter(Boolean).join(', ')}
-                    </p>
-                  </div>
-                  <dl>
-                    <div><dt>State</dt><dd>{station.state}</dd></div>
-                    <div><dt>City</dt><dd>{station.city || 'Not specified'}</dd></div>
-                    {station.contact && <div><dt>Contact</dt><dd>{station.contact}</dd></div>}
-                  </dl>
-                  <span className="fuel-station-status">{station.status || 'ACTIVE'}</span>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="master-empty fuel-station-empty">
-              <MapPin size={28} />
-              <h3>No fuel stations added</h3>
-              <p>New stations will appear here immediately after they are saved.</p>
-            </div>
-          )}
-        </section>
       </article>
     </section>
   );

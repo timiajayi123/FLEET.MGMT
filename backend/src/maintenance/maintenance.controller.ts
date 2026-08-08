@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseFilePipeBuilder, Patch, Post, Req, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, ParseFilePipeBuilder, Patch, Post, Query, Req, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import type { Response } from 'express';
@@ -10,8 +10,21 @@ import { MaintenanceService } from './maintenance.service';
 @Controller('maintenance')
 export class MaintenanceController {
   constructor(private readonly auth: AuthService, private readonly maintenance: MaintenanceService) {}
-  @Get() async list(@Req() req: Request) { return this.maintenance.list(await requireUser(this.auth, req, ['S_ADMIN', 'FM', 'DRIVER'])); }
-  @Get('vehicles') async vehicles(@Req() req: Request) { return this.maintenance.vehicles(await requireUser(this.auth, req, ['S_ADMIN', 'FM', 'DRIVER'])); }
+  @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  async list(@Req() req: Request, @Query('limit') requestedLimit?: string) {
+    const parsedLimit = Number(requestedLimit);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(200, Math.max(2, Math.floor(parsedLimit)))
+      : 2;
+    return this.maintenance.list(
+      await requireUser(this.auth, req, ['S_ADMIN', 'FM', 'DRIVER']),
+      limit,
+    );
+  }
+  @Get('vehicles')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  async vehicles(@Req() req: Request) { return this.maintenance.vehicles(await requireUser(this.auth, req, ['S_ADMIN', 'FM', 'DRIVER'])); }
   @Post()
   @UseInterceptors(FileInterceptor('evidence', { limits: { fileSize: 5 * 1024 * 1024 } }))
   async create(@Req() req: Request, @Body() dto: CreateMaintenanceRequestDto, @UploadedFile(new ParseFilePipeBuilder().addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 }).build({ fileIsRequired: false })) file?: Express.Multer.File) { return this.maintenance.create(dto, await requireUser(this.auth, req, ['DRIVER']), file); }

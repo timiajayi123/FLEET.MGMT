@@ -171,7 +171,10 @@ export function SpeedOverspeedWorkspace() {
     if ((status === 'RESOLVED' || status === 'DISMISSED') && !note) return;
     const response = await fetch(`/api/speed/violations/${selected.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Fleet-Success-Message': `Violation ${status.toLowerCase()}.`,
+      },
       body: JSON.stringify({ status, note }),
     });
     if (!response.ok) return setMessage('The violation could not be updated.');
@@ -182,7 +185,10 @@ export function SpeedOverspeedWorkspace() {
   async function saveSettings() {
     const response = await fetch('/api/speed/settings', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Fleet-Success-Message': 'Speed settings saved.',
+      },
       body: JSON.stringify(settings),
     });
     const payload = await response.json();
@@ -198,7 +204,10 @@ export function SpeedOverspeedWorkspace() {
   async function saveType(item: TypeLimit) {
     const response = await fetch(`/api/speed/vehicle-types/${item.id}/limit`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Fleet-Success-Message': `${item.name} speed limit saved.`,
+      },
       body: JSON.stringify({ speedLimit: item.speedLimit }),
     });
     setMessage(

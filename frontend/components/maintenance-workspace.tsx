@@ -13,7 +13,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import Image from 'next/image';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from './page-header';
 
 type Vehicle = {
@@ -50,6 +50,8 @@ export function MaintenanceWorkspace() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<MaintenanceRequest | null>(null);
   const [feedbackRequest, setFeedbackRequest] = useState<MaintenanceRequest | null>(null);
@@ -65,44 +67,75 @@ export function MaintenanceWorkspace() {
   const [statusFilter, setStatusFilter] = useState('');
   const [serviceFilter, setServiceFilter] = useState('');
   const [showAllReports, setShowAllReports] = useState(false);
+  const [totalReports, setTotalReports] = useState(0);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const historyLoaded = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showLoading = true, includeHistory = historyLoaded.current) => {
+    if (showLoading) setLoading(true);
     try {
-      setError('');
-      const [requestResponse, vehicleResponse] = await Promise.all([
-        fetch('/api/maintenance', { cache: 'no-store' }),
-        fetch('/api/maintenance/vehicles', { cache: 'no-store' }),
-      ]);
+      if (showLoading) setError('');
+      const limit = includeHistory ? 200 : 2;
+      const requestResponse = await fetch(
+        `/api/maintenance?limit=${limit}&refresh=${Date.now()}`,
+        { cache: 'no-store' },
+      );
       const requestPayload = await requestResponse.json().catch(() => ({}));
-      const vehiclePayload = await vehicleResponse.json().catch(() => ({}));
       if (!requestResponse.ok)
         throw new Error(requestPayload.message || 'Unable to load maintenance requests.');
       setRequests(requestPayload.data ?? []);
+      setTotalReports(Number(requestPayload.total ?? requestPayload.data?.length ?? 0));
+      setPendingTotal(Number(requestPayload.pendingTotal ?? 0));
       setCanReview(Boolean(requestPayload.canReview));
-      if (vehicleResponse.ok) {
-        setVehicles(vehiclePayload.data ?? []);
-      } else {
-        setVehicles([]);
-        setError(
-          vehiclePayload.message ||
-            'Your maintenance form is available, but no eligible vehicles could be loaded. Make sure your user account is linked to a driver profile and has an allocated vehicle.',
-        );
-      }
+      return true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to load maintenance.');
+      if (showLoading || includeHistory) {
+        setError(reason instanceof Error ? reason.message : 'Unable to load maintenance.');
+      }
+      return false;
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     queueMicrotask(() => void load());
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void load(false);
+    };
+    const refreshTimer = window.setInterval(refresh, 10_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, [load]);
-  const pending = useMemo(
-    () => requests.filter((request) => request.status === 'PENDING_REVIEW'),
-    [requests],
-  );
+
+  useEffect(() => {
+    if (canReview !== false) return;
+    const controller = new AbortController();
+    setVehiclesLoading(true);
+    fetch(`/api/maintenance/vehicles?refresh=${Date.now()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok)
+          throw new Error(
+            payload.message ||
+              'No eligible vehicles could be loaded. Make sure your account is linked to a driver profile and has an allocated vehicle.',
+          );
+        setVehicles(payload.data ?? []);
+      })
+      .catch((reason) => {
+        if (reason.name !== 'AbortError') setError(reason.message);
+      })
+      .finally(() => setVehiclesLoading(false));
+    return () => controller.abort();
+  }, [canReview]);
   const filteredRequests = useMemo(() => {
     const term = search.trim().toLowerCase();
     return requests.filter((request) => {
@@ -139,6 +172,15 @@ export function MaintenanceWorkspace() {
     vehicleFilter,
   ]);
   const visibleRequests = showAllReports ? filteredRequests : filteredRequests.slice(0, 2);
+
+  async function revealHistory() {
+    setShowAllReports(true);
+    if (historyLoaded.current) return;
+    setLoadingHistory(true);
+    const loaded = await load(false, true);
+    if (loaded) historyLoaded.current = true;
+    setLoadingHistory(false);
+  }
 
   function clearFilters() {
     setSearch('');
@@ -186,9 +228,14 @@ export function MaintenanceWorkspace() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Unable to review maintenance request.');
+      if (payload.data) {
+        setRequests((current) =>
+          current.map((request) => (request.id === payload.data.id ? payload.data : request)),
+        );
+      }
       setSelected(null);
       setMessage('Vehicle maintenance decision saved.');
-      await load();
+      await load(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to review maintenance request.');
     } finally {
@@ -197,8 +244,9 @@ export function MaintenanceWorkspace() {
   }
 
   function openFeedback(request: MaintenanceRequest) {
+    if (request.driverFeedback) return;
     setFeedbackRequest(request);
-    setFeedbackChoice(request.driverFeedback ?? '');
+    setFeedbackChoice('');
   }
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {
@@ -215,10 +263,15 @@ export function MaintenanceWorkspace() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Unable to save your feedback.');
+      if (payload.data) {
+        setRequests((current) =>
+          current.map((request) => (request.id === payload.data.id ? payload.data : request)),
+        );
+      }
       setFeedbackRequest(null);
       setFeedbackChoice('');
       setMessage('Maintenance feedback sent.');
-      await load();
+      await load(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to save your feedback.');
     } finally {
@@ -310,10 +363,14 @@ export function MaintenanceWorkspace() {
                     <input name="evidence" type="file" accept="image/jpeg,image/png,image/webp" />
                     <small>JPEG, PNG, or WebP up to 5 MB.</small>
                   </label>
-                  <button className="primary-action" disabled={saving || !vehicles.length}>
-                    {saving ? 'Submitting...' : 'Submit maintenance request'}
+                  <button className="primary-action" disabled={saving || vehiclesLoading || !vehicles.length}>
+                    {saving
+                      ? 'Submitting...'
+                      : vehiclesLoading
+                        ? 'Loading vehicles...'
+                        : 'Submit maintenance request'}
                   </button>
-                  {!vehicles.length && (
+                  {!vehiclesLoading && !vehicles.length && (
                     <small className="maintenance-note">
                       Drivers can report vehicles that have been allocated to them.
                     </small>
@@ -329,7 +386,7 @@ export function MaintenanceWorkspace() {
                   </h2>
                   <p>
                     {canReview === true
-                      ? `${pending.length} request${pending.length === 1 ? '' : 's'} awaiting review.`
+                      ? `${pendingTotal} request${pendingTotal === 1 ? '' : 's'} awaiting review.`
                       : 'Your submitted vehicle fault reports.'}
                   </p>
                 </div>
@@ -356,6 +413,7 @@ export function MaintenanceWorkspace() {
                   setServiceFilter={setServiceFilter}
                   resultCount={filteredRequests.length}
                   onClear={clearFilters}
+                  onExpand={() => void revealHistory()}
                 />
               )}
               {filteredRequests.length ? (
@@ -409,26 +467,32 @@ export function MaintenanceWorkspace() {
                         <button className="secondary-action" onClick={() => setSelected(request)}>
                           {request.status === 'PENDING_REVIEW'
                             ? 'Open review request'
-                            : 'View or change decision'}
+                            : 'View decision'}
                         </button>
                       )}
-                      {canReview === false && request.reviewedAt && (
+                      {canReview === false && request.reviewedAt && !request.driverFeedback && (
                         <button className="secondary-action" onClick={() => openFeedback(request)}>
-                          {request.driverFeedback ? 'Update feedback' : 'Give feedback'}
+                          Give feedback
                         </button>
                       )}
                     </article>
                   ))}
                 </div>
-                {filteredRequests.length > 2 && (
+                {totalReports > 2 && (
                   <button
                     type="button"
                     className="secondary-action maintenance-show-reports"
-                    onClick={() => setShowAllReports((current) => !current)}
+                    disabled={loadingHistory}
+                    onClick={() => {
+                      if (showAllReports) setShowAllReports(false);
+                      else void revealHistory();
+                    }}
                   >
-                    {showAllReports
+                    {loadingHistory
+                      ? 'Loading reports...'
+                      : showAllReports
                       ? 'Show only recent reports'
-                      : `Show all reports (${filteredRequests.length})`}
+                      : `Show all reports (${totalReports})`}
                   </button>
                 )}
                 </>
@@ -532,46 +596,50 @@ export function MaintenanceWorkspace() {
                 <span>Open full image</span>
               </a>
             )}
-            <form onSubmit={review}>
-              <label>
-                <span>Serviceability decision</span>
-                <select
-                  name="serviceability"
-                  defaultValue={selected.serviceability ?? 'SERVICEABLE'}
-                  required
-                >
-                  <option value="SERVICEABLE">Serviceable - send for maintenance</option>
-                  <option value="UNSERVICEABLE">Unserviceable - remove from service</option>
-                </select>
-              </label>
-              <label>
-                <span>Fleet admin remark</span>
-                <textarea
-                  name="adminRemark"
-                  rows={5}
-                  required
-                  maxLength={2000}
-                  placeholder="Record the assessment, work required, workshop instruction, or reason for removing the vehicle from service."
-                  defaultValue={selected.adminRemark ?? ''}
-                />
-              </label>
-              <footer>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() => setSelected(null)}
-                >
-                  Cancel
+            {selected.status === 'PENDING_REVIEW' && !selected.reviewedAt ? (
+              <form onSubmit={review}>
+                <label>
+                  <span>Serviceability decision</span>
+                  <select name="serviceability" defaultValue="SERVICEABLE" required>
+                    <option value="SERVICEABLE">Serviceable - send for maintenance</option>
+                    <option value="UNSERVICEABLE">Unserviceable - remove from service</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Fleet admin remark</span>
+                  <textarea
+                    name="adminRemark"
+                    rows={5}
+                    required
+                    maxLength={2000}
+                    placeholder="Record the assessment, work required, workshop instruction, or reason for removing the vehicle from service."
+                  />
+                </label>
+                <footer>
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => setSelected(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button className="primary-action" disabled={saving}>
+                    {saving ? 'Saving...' : 'Save maintenance decision'}
+                  </button>
+                </footer>
+              </form>
+            ) : (
+              <section className="maintenance-final-notice">
+                <CheckCircle2 size={19} />
+                <div>
+                  <strong>Decision completed</strong>
+                  <p>This maintenance decision is final and cannot be changed.</p>
+                </div>
+                <button className="secondary-action" onClick={() => setSelected(null)}>
+                  Close
                 </button>
-                <button className="primary-action" disabled={saving}>
-                  {saving
-                    ? 'Saving...'
-                    : selected.status === 'PENDING_REVIEW'
-                      ? 'Save maintenance decision'
-                      : 'Update maintenance decision'}
-                </button>
-              </footer>
-            </form>
+              </section>
+            )}
           </section>
         </div>
       )}
@@ -658,6 +726,7 @@ type FilterProps = {
   setServiceFilter: (value: string) => void;
   resultCount: number;
   onClear: () => void;
+  onExpand: () => void;
 };
 
 function MaintenanceFilters(props: FilterProps) {
@@ -671,7 +740,7 @@ function MaintenanceFilters(props: FilterProps) {
   ].sort((a, b) => a.registrationNumber.localeCompare(b.registrationNumber));
   const issues = [...new Set(props.requests.map((request) => request.issueType))].sort();
   return (
-    <section className="maintenance-filters">
+    <section className="maintenance-filters" onFocusCapture={props.onExpand}>
       <header>
         <div>
           <Filter size={17} />

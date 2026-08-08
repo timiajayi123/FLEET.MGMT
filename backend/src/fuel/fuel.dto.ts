@@ -15,15 +15,11 @@ import {
 const decimal = ({ value }: { value: unknown }) =>
   value === '' || value === undefined || value === null ? undefined : Number(value);
 const text = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
-const optionalId = ({ value }: { value: unknown }) =>
-  value === '' || value === undefined || value === null ? undefined : value;
-
 export class CreateFuelEntryDto {
   @IsOptional() @IsUUID() vehicleId?: string;
   @IsOptional() @IsUUID() driverId?: string;
   @IsOptional() @IsUUID() allocationId?: string;
   @IsOptional() @IsUUID() tripId?: string;
-  @Transform(optionalId) @IsOptional() @IsUUID() stationId?: string;
   @IsOptional() @IsUUID() fuelCardId?: string;
   @IsDateString() fuelingAt!: string;
   @Transform(text) @IsString() @IsNotEmpty() @MaxLength(200) stationName!: string;
@@ -71,23 +67,10 @@ export class FuelCardDto {
   @Transform(decimal) @IsOptional() @IsNumber() @Min(0) currentBalance?: number;
   @Transform(text) @IsOptional() @IsString() @MaxLength(1000) allowedFuelTypes?: string;
   @Transform(text) @IsOptional() @IsString() @MaxLength(1000) allowedStates?: string;
-  @IsOptional() @IsUUID() allowedStationId?: string;
   @Transform(text) @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
 
-export class StationDto {
-  @Transform(text) @IsString() @IsNotEmpty() @MaxLength(200) name!: string;
-  @Transform(text) @IsOptional() @IsString() @MaxLength(100) brand?: string;
-  @Transform(text) @IsOptional() @IsString() @MaxLength(1000) address?: string;
-  @Transform(text) @IsString() @IsNotEmpty() @MaxLength(100) state!: string;
-  @Transform(text) @IsOptional() @IsString() @MaxLength(100) city?: string;
-  @Transform(decimal) @IsOptional() @IsNumber() @Min(-90) @Max(90) latitude?: number;
-  @Transform(decimal) @IsOptional() @IsNumber() @Min(-180) @Max(180) longitude?: number;
-  @Transform(text) @IsOptional() @IsString() @MaxLength(100) contact?: string;
-}
-
 export class FuelPriceDto {
-  @IsOptional() @IsUUID() stationId?: string;
   @Transform(text) @IsString() @IsNotEmpty() @MaxLength(100) state!: string;
   @Transform(text) @IsString() @IsNotEmpty() @MaxLength(40) fuelType!: string;
   @IsDateString() effectiveDate!: string;

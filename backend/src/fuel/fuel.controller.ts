@@ -20,7 +20,6 @@ import {
   DecisionDto,
   FuelCardDto,
   FuelPriceDto,
-  StationDto,
 } from './fuel.dto';
 import { FuelService } from './fuel.service';
 
@@ -81,16 +80,6 @@ export class FuelController {
   }
   @Post('cards') async card(@Req() req: Request, @Body() dto: FuelCardDto) {
     return this.fuel.createCard(dto, await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]));
-  }
-  @Get('stations') async stations(@Req() req: Request) {
-    await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]);
-    return this.fuel.stations();
-  }
-  @Post('stations') async station(@Req() req: Request, @Body() dto: StationDto) {
-    return this.fuel.createStation(
-      dto,
-      await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]),
-    );
   }
   @Post('prices') async price(@Req() req: Request, @Body() dto: FuelPriceDto) {
     return this.fuel.createPrice(dto, await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]));

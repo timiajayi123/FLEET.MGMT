@@ -48,15 +48,22 @@ const listSelect = {
 export class MaintenanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(user: SessionUser) {
+  async list(user: SessionUser, limit = 2) {
     const where = user.role.code === 'DRIVER' ? { reportedById: user.id } : undefined;
-    return {
-      data: await this.prisma.maintenanceRequest.findMany({
+    const [data, total, pendingTotal] = await Promise.all([
+      this.prisma.maintenanceRequest.findMany({
         where,
         select: listSelect,
-        orderBy: { createdAt: 'desc' },
-        take: 200,
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
       }),
+      this.prisma.maintenanceRequest.count({ where }),
+      this.prisma.maintenanceRequest.count({ where: { ...where, status: 'PENDING_REVIEW' } }),
+    ]);
+    return {
+      data,
+      total,
+      pendingTotal,
       canReview: MANAGERS.includes(user.role.code),
     };
   }
@@ -129,10 +136,24 @@ export class MaintenanceService {
   async review(id: string, dto: ReviewMaintenanceRequestDto, user: SessionUser) {
     const request = await this.prisma.maintenanceRequest.findUnique({ where: { id } });
     if (!request) throw new NotFoundException('Maintenance request not found.');
+    if (request.reviewedAt || request.status !== 'PENDING_REVIEW')
+      throw new BadRequestException('This maintenance decision is final and cannot be changed.');
     const serviceability = dto.serviceability;
     const vehicleStatus = serviceability === 'SERVICEABLE' ? 'MAINTENANCE' : 'OUT_OF_SERVICE';
     return {
       data: await this.prisma.$transaction(async (tx) => {
+        const lockedDecision = await tx.maintenanceRequest.updateMany({
+          where: { id, reviewedAt: null, status: 'PENDING_REVIEW' },
+          data: {
+            serviceability,
+            adminRemark: dto.adminRemark.trim(),
+            status: serviceability === 'SERVICEABLE' ? 'MAINTENANCE_REQUIRED' : 'OUT_OF_SERVICE',
+            reviewedById: user.id,
+            reviewedAt: new Date(),
+          },
+        });
+        if (lockedDecision.count !== 1)
+          throw new BadRequestException('This maintenance decision is final and cannot be changed.');
         await tx.vehicle.update({
           where: { id: request.vehicleId },
           data: {
@@ -142,15 +163,8 @@ export class MaintenanceService {
             faultDescription: request.issueDescription,
           },
         });
-        return tx.maintenanceRequest.update({
+        return tx.maintenanceRequest.findUniqueOrThrow({
           where: { id },
-          data: {
-            serviceability,
-            adminRemark: dto.adminRemark.trim(),
-            status: serviceability === 'SERVICEABLE' ? 'MAINTENANCE_REQUIRED' : 'OUT_OF_SERVICE',
-            reviewedById: user.id,
-            reviewedAt: new Date(),
-          },
           include,
         });
       }),
@@ -164,15 +178,21 @@ export class MaintenanceService {
       throw new BadRequestException('You can only respond to maintenance requests you reported.');
     if (!request.reviewedAt || request.status === 'PENDING_REVIEW')
       throw new BadRequestException('Fleet must make a maintenance decision before you respond.');
+    if (request.driverFeedback || request.driverFeedbackAt)
+      throw new BadRequestException('Your maintenance feedback is final and cannot be changed.');
     return {
-      data: await this.prisma.maintenanceRequest.update({
-        where: { id },
-        data: {
-          driverFeedback: dto.feedback,
-          driverFeedbackRemark: dto.remark?.trim() || null,
-          driverFeedbackAt: new Date(),
-        },
-        include,
+      data: await this.prisma.$transaction(async (tx) => {
+        const lockedFeedback = await tx.maintenanceRequest.updateMany({
+          where: { id, driverFeedback: null, driverFeedbackAt: null },
+          data: {
+            driverFeedback: dto.feedback,
+            driverFeedbackRemark: dto.remark?.trim() || null,
+            driverFeedbackAt: new Date(),
+          },
+        });
+        if (lockedFeedback.count !== 1)
+          throw new BadRequestException('Your maintenance feedback is final and cannot be changed.');
+        return tx.maintenanceRequest.findUniqueOrThrow({ where: { id }, include });
       }),
     };
   }

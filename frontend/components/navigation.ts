@@ -114,12 +114,6 @@ export const navigation: NavigationGroup[] = [
         icon: History,
         roles: ['S_ADMIN', 'FM', 'DRIVER'],
       },
-      {
-        label: 'Fuel Stations',
-        href: '/fuel/stations',
-        icon: MapPin,
-        roles: ['S_ADMIN', 'FM'],
-      },
     ],
   },
   {
