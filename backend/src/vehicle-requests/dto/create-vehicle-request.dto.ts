@@ -59,7 +59,9 @@ export class CreateVehicleRequestDto {
   @MaxLength(200)
   customDepartment?: string;
 
-  @Transform(trim)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.trim() === '' ? undefined : trim({ value }),
+  )
   @IsOptional()
   @IsString()
   @Length(2, 200)

@@ -129,38 +129,39 @@ model Role {
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.UniqueIdentifier
-  email               String               @unique
-  passwordHash        String
-  staffName           String
-  employeeId          String               @unique
-  phone               String?
-  passportMimeType    String?
-  passportData        Bytes?
-  status              String               @default("ACTIVE")
-  roleId              String               @db.UniqueIdentifier
-  locationId          String?              @db.UniqueIdentifier
-  directorateId       String?              @db.UniqueIdentifier
-  departmentId        String?              @db.UniqueIdentifier
-  unitId              String?              @db.UniqueIdentifier
-  role                Role                 @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  location            Location?            @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  directorate         Directorate?         @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  department          Department?          @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  unit                Unit?                @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sessions            Session[]
-  requests            VehicleRequest[]
-  assignedAllocations VehicleAllocation[]  @relation("AllocationAssigner")
-  maintenanceReports  MaintenanceRequest[] @relation("MaintenanceReporter")
-  maintenanceReviews  MaintenanceRequest[] @relation("MaintenanceReviewer")
-  fuelEntriesCreated  FuelEntry[]          @relation("FuelEntryCreator")
-  fuelApprovals       FuelApproval[]       @relation("FuelApprovalActor")
-  fuelAuditLogs       FuelAuditLog[]       @relation("FuelAuditActor")
-  speedSettingsUpdated FleetSpeedSetting[] @relation("SpeedSettingUpdater")
-  speedViolationsAcknowledged SpeedViolation[] @relation("SpeedViolationAcknowledger")
-  speedViolationAudits SpeedViolationAudit[] @relation("SpeedViolationAuditActor")
-  createdAt           DateTime             @default(now()) @db.DateTime2
-  updatedAt           DateTime             @updatedAt @db.DateTime2
+  id                          String                @id @default(uuid()) @db.UniqueIdentifier
+  email                       String                @unique
+  passwordHash                String
+  staffName                   String
+  employeeId                  String                @unique
+  phone                       String?
+  passportMimeType            String?
+  passportData                Bytes?
+  status                      String                @default("ACTIVE")
+  roleId                      String                @db.UniqueIdentifier
+  locationId                  String?               @db.UniqueIdentifier
+  directorateId               String?               @db.UniqueIdentifier
+  departmentId                String?               @db.UniqueIdentifier
+  unitId                      String?               @db.UniqueIdentifier
+  role                        Role                  @relation(fields: [roleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  location                    Location?             @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  directorate                 Directorate?          @relation(fields: [directorateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department                  Department?           @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  unit                        Unit?                 @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sessions                    Session[]
+  requests                    VehicleRequest[]
+  assignedAllocations         VehicleAllocation[]   @relation("AllocationAssigner")
+  maintenanceReports          MaintenanceRequest[]  @relation("MaintenanceReporter")
+  maintenanceReviews          MaintenanceRequest[]  @relation("MaintenanceReviewer")
+  fuelEntriesCreated          FuelEntry[]           @relation("FuelEntryCreator")
+  fuelApprovals               FuelApproval[]        @relation("FuelApprovalActor")
+  fuelAuditLogs               FuelAuditLog[]        @relation("FuelAuditActor")
+  speedSettingsUpdated        FleetSpeedSetting[]   @relation("SpeedSettingUpdater")
+  speedViolationsAcknowledged SpeedViolation[]      @relation("SpeedViolationAcknowledger")
+  speedViolationAudits        SpeedViolationAudit[] @relation("SpeedViolationAuditActor")
+  driverRatings               DriverRating[]
+  createdAt                   DateTime              @default(now()) @db.DateTime2
+  updatedAt                   DateTime              @updatedAt @db.DateTime2
 
   @@index([status, staffName])
   @@index([roleId])
@@ -193,8 +194,8 @@ model Vehicle {
   locationId                 String?                 @db.UniqueIdentifier
   vehicleTypeId              String?                 @db.UniqueIdentifier
   customSpeedLimit           Float?
-  previousOdometer            Decimal?                @db.Decimal(18, 2)
-  currentOdometer             Decimal?                @db.Decimal(18, 2)
+  previousOdometer           Decimal?                @db.Decimal(18, 2)
+  currentOdometer            Decimal?                @db.Decimal(18, 2)
   imageMimeType              String?
   imageData                  Bytes?
   location                   Location?               @relation(fields: [locationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -270,6 +271,7 @@ model Driver {
   fuelCards        FuelCard[]
   speedReadings    SpeedReading[]
   speedViolations  SpeedViolation[]
+  ratings          DriverRating[]
 
   @@index([status, staffName])
   @@index([licenceNumber])
@@ -424,6 +426,7 @@ model VehicleRequest {
   requester            User?               @relation(fields: [requesterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   allocations          VehicleAllocation[]
   trips                Trip[]
+  ratings              DriverRating[]
   createdAt            DateTime            @default(now()) @db.DateTime2
   updatedAt            DateTime            @updatedAt @db.DateTime2
 
@@ -464,6 +467,7 @@ model Trip {
   fuelEntries        FuelEntry[]
   speedReadings      SpeedReading[]
   speedViolations    SpeedViolation[]
+  rating             DriverRating?
   createdAt          DateTime                @default(now()) @db.DateTime2
   updatedAt          DateTime                @updatedAt @db.DateTime2
 
@@ -472,6 +476,27 @@ model Trip {
   @@index([driverId, startedAt])
   @@index([requestId])
   @@map("trips")
+}
+
+model DriverRating {
+  id         String         @id @default(uuid()) @db.UniqueIdentifier
+  tripId     String         @unique @db.UniqueIdentifier
+  requestId  String         @db.UniqueIdentifier
+  driverId   String         @db.UniqueIdentifier
+  ratedById  String         @db.UniqueIdentifier
+  stars      Int
+  likedTrip  Boolean
+  remark     String?        @db.NVarChar(1000)
+  complaint  String?        @db.NVarChar(1500)
+  trip       Trip           @relation(fields: [tripId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  request    VehicleRequest @relation(fields: [requestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver     Driver         @relation(fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ratedBy    User           @relation(fields: [ratedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt  DateTime       @default(now()) @db.DateTime2
+
+  @@index([driverId, createdAt])
+  @@index([ratedById, createdAt])
+  @@map("driver_ratings")
 }
 
 model FleetSpeedSetting {
@@ -545,7 +570,7 @@ model SpeedViolation {
   acknowledgedAt      DateTime?             @db.DateTime2
   acknowledgedById    String?               @db.UniqueIdentifier
   resolutionNote      String?               @db.NVarChar(2000)
-  lastAlertedAt       DateTime?              @db.DateTime2
+  lastAlertedAt       DateTime?             @db.DateTime2
   vehicle             Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   driver              Driver?               @relation(fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   trip                Trip?                 @relation(fields: [tripId], references: [id], onDelete: NoAction, onUpdate: NoAction)

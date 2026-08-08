@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ForceDeleteDriverDto, SaveDriverDto } from './drivers.dto';
 
@@ -41,33 +46,60 @@ const select = {
 export class DriversService {
   constructor(private prisma: PrismaService) {}
   list() {
-    return this.prisma.driver.findMany({ select, orderBy: [{ serialNumber: 'asc' }, { staffName: 'asc' }] });
+    return this.prisma.driver.findMany({
+      select,
+      orderBy: [{ serialNumber: 'asc' }, { staffName: 'asc' }],
+    });
   }
   async details(id: string) {
     const driver = await this.prisma.driver.findUnique({ where: { id }, select });
     if (!driver) throw new NotFoundException('Driver not found.');
 
-    const [allocations, trips, completedTrips, activeTrips] = await this.prisma.$transaction([
-      this.prisma.vehicleAllocation.findMany({
-        where: { driverId: id },
-        select: {
-          id: true, status: true, destination: true, purpose: true, startAt: true, expectedEndAt: true,
-          vehicle: { select: { id: true, registrationNumber: true, manufacturer: true, model: true, status: true, vehicleType: { select: { name: true } } } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      }),
-      this.prisma.trip.aggregate({
-        where: { driverId: id },
-        _count: { _all: true },
-        _avg: { averageSpeed: true },
-        _sum: { calculatedDistance: true },
-      }),
-      this.prisma.trip.count({ where: { driverId: id, status: 'COMPLETED' } }),
-      this.prisma.trip.count({ where: { driverId: id, status: 'IN_PROGRESS' } }),
-    ]);
+    const [allocations, trips, completedTrips, activeTrips, ratings] =
+      await this.prisma.$transaction([
+        this.prisma.vehicleAllocation.findMany({
+          where: { driverId: id },
+          select: {
+            id: true,
+            status: true,
+            destination: true,
+            purpose: true,
+            startAt: true,
+            expectedEndAt: true,
+            vehicle: {
+              select: {
+                id: true,
+                registrationNumber: true,
+                manufacturer: true,
+                model: true,
+                status: true,
+                vehicleType: { select: { name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+        this.prisma.trip.aggregate({
+          where: { driverId: id },
+          _count: { _all: true },
+          _avg: { averageSpeed: true },
+          _sum: { calculatedDistance: true },
+        }),
+        this.prisma.trip.count({ where: { driverId: id, status: 'COMPLETED' } }),
+        this.prisma.trip.count({ where: { driverId: id, status: 'IN_PROGRESS' } }),
+        this.prisma.driverRating.aggregate({
+          where: { driverId: id },
+          _count: { _all: true },
+          _avg: { stars: true },
+        }),
+      ]);
 
-    const uniqueVehicles = [...new Map(allocations.map((allocation) => [allocation.vehicle.id, allocation.vehicle])).values()];
+    const uniqueVehicles = [
+      ...new Map(
+        allocations.map((allocation) => [allocation.vehicle.id, allocation.vehicle]),
+      ).values(),
+    ];
     return {
       driver,
       vehicles: uniqueVehicles,
@@ -78,6 +110,8 @@ export class DriversService {
         activeTrips,
         averageSpeed: trips._avg.averageSpeed,
         totalDistance: trips._sum.calculatedDistance ?? 0,
+        rating: ratings._avg.stars,
+        ratingCount: ratings._count._all,
       },
     };
   }
@@ -93,8 +127,15 @@ export class DriversService {
       this.prisma.driverCurrentLocation.count({ where: { driverId: id } }),
       this.prisma.driverLocationHistory.count({ where: { driverId: id } }),
     ]);
-    const blocks = [a && `allocations (${a})`, c && `current GPS location (${c})`, h && `GPS history (${h})`].filter(Boolean);
-    if (blocks.length) throw new ConflictException(`This driver cannot be deleted because they are attached to: ${blocks.join(', ')}.`);
+    const blocks = [
+      a && `allocations (${a})`,
+      c && `current GPS location (${c})`,
+      h && `GPS history (${h})`,
+    ].filter(Boolean);
+    if (blocks.length)
+      throw new ConflictException(
+        `This driver cannot be deleted because they are attached to: ${blocks.join(', ')}.`,
+      );
     return this.prisma.driver.delete({ where: { id }, select });
   }
   async forceRemove(id: string, options: ForceDeleteDriverDto = {}) {
@@ -109,7 +150,9 @@ export class DriversService {
         where: { driverId: id },
         select: { id: true, vehicleId: true, requestId: true },
       });
-      const linkedVehicleIds = [...new Set(driverAllocations.map((allocation) => allocation.vehicleId).filter(Boolean))];
+      const linkedVehicleIds = [
+        ...new Set(driverAllocations.map((allocation) => allocation.vehicleId).filter(Boolean)),
+      ];
       const vehicleIds = options.deleteLinkedVehicles ? linkedVehicleIds : [];
       const allocations = vehicleIds.length
         ? await tx.vehicleAllocation.findMany({
@@ -118,7 +161,11 @@ export class DriversService {
           })
         : driverAllocations;
       const allocationIds = allocations.map((allocation) => allocation.id);
-      const requestIds = [...new Set(allocations.map((allocation) => allocation.requestId).filter(Boolean) as string[])];
+      const requestIds = [
+        ...new Set(
+          allocations.map((allocation) => allocation.requestId).filter(Boolean) as string[],
+        ),
+      ];
 
       const tripWhere = this.tripWhere(id, vehicleIds, allocationIds);
       const trips = await tx.trip.findMany({
@@ -138,11 +185,17 @@ export class DriversService {
         where: this.allocationWhere(id, vehicleIds),
       });
       const requestsReset = requestIds.length
-        ? await tx.vehicleRequest.updateMany({ where: { id: { in: requestIds } }, data: { status: 'APPROVED' } })
+        ? await tx.vehicleRequest.updateMany({
+            where: { id: { in: requestIds } },
+            data: { status: 'APPROVED' },
+          })
         : { count: 0 };
 
       if (!options.deleteLinkedVehicles && linkedVehicleIds.length) {
-        await tx.vehicle.updateMany({ where: { id: { in: linkedVehicleIds } }, data: { status: 'AVAILABLE' } });
+        await tx.vehicle.updateMany({
+          where: { id: { in: linkedVehicleIds } },
+          data: { status: 'AVAILABLE' },
+        });
       }
 
       const deletedDriver = await tx.driver.delete({ where: { id }, select });
@@ -165,8 +218,12 @@ export class DriversService {
     });
   }
   async passport(id: string) {
-    const d = await this.prisma.driver.findUnique({ where: { id }, select: { passportData: true, passportMimeType: true } });
-    if (!d?.passportData || !d.passportMimeType) throw new NotFoundException('Driver passport not found.');
+    const d = await this.prisma.driver.findUnique({
+      where: { id },
+      select: { passportData: true, passportMimeType: true },
+    });
+    if (!d?.passportData || !d.passportMimeType)
+      throw new NotFoundException('Driver passport not found.');
     return d;
   }
   async savePassport(id: string, file: Express.Multer.File) {
@@ -194,7 +251,12 @@ export class DriversService {
     };
   }
 
-  private dependentWhere(driverId: string, vehicleIds: string[], allocationIds: string[], tripIds: string[]) {
+  private dependentWhere(
+    driverId: string,
+    vehicleIds: string[],
+    allocationIds: string[],
+    tripIds: string[],
+  ) {
     const OR: object[] = [{ driverId }];
     if (vehicleIds.length) OR.push({ vehicleId: { in: vehicleIds } });
     if (allocationIds.length) OR.push({ allocationId: { in: allocationIds } });

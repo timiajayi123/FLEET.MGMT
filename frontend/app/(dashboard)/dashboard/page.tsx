@@ -4,8 +4,18 @@ import { PageHeader } from '@/components/page-header';
 import { AnalyticsDashboard } from '@/components/analytics-dashboard';
 import { DriverTripDashboard } from '@/components/driver-trip-dashboard';
 import { apiMessage, readApiJson } from '@/lib/api-response';
-import { ArrowUpRight, CarFront, CheckCircle2, Clock3, ClipboardList, Navigation, Route, X, type LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import {
+  ArrowUpRight,
+  CarFront,
+  CheckCircle2,
+  Clock3,
+  ClipboardList,
+  Navigation,
+  Route,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type User = { staffName: string; role: { code: string; name: string } };
@@ -16,16 +26,52 @@ type StaffRequest = {
   purposeOfTrip: string;
   status: string;
   createdAt: string;
-  allocations: { status: string; driver: { staffName: string; employeeId: string; phone: string }; vehicle: { registrationNumber: string; manufacturer: string; model: string } }[];
+  allocations: {
+    status: string;
+    driver: { staffName: string; employeeId: string; phone: string };
+    vehicle: { registrationNumber: string; manufacturer: string; model: string };
+  }[];
 };
 type DashboardData = {
   role: 'ADMIN' | 'STAFF' | 'DRIVER';
   metrics: Record<string, number>;
   activity: { date: string; count: number }[];
-  approvalQueue: { id: string; requestNumber: string; staffName: string; destination: string; createdAt: string }[];
+  approvalQueue: {
+    id: string;
+    requestNumber: string;
+    staffName: string;
+    destination: string;
+    createdAt: string;
+  }[];
   myRequests?: StaffRequest[];
-  currentAssignment?: { id: string; status: string; startAt: string; expectedEndAt: string; purpose: string; destination?: string; vehicle: { registrationNumber: string; manufacturer: string; model: string }; request?: { requestNumber: string; staffName: string; destination: string }; trip?: { status: string } } | null;
-  recentTrips?: { id: string; status: string; calculatedDistance?: number; startedAt?: string; endedAt?: string; vehicle: { registrationNumber: string; manufacturer: string; model: string }; request?: { requestNumber: string; staffName: string; destination: string }; allocation: { purpose: string; destination?: string } }[];
+  pendingRating?: {
+    id: string;
+    endedAt?: string;
+    driver: { id: string; staffName: string };
+    vehicle: { registrationNumber: string };
+    request?: { requestNumber: string; destination: string };
+  } | null;
+  currentAssignment?: {
+    id: string;
+    status: string;
+    startAt: string;
+    expectedEndAt: string;
+    purpose: string;
+    destination?: string;
+    vehicle: { registrationNumber: string; manufacturer: string; model: string };
+    request?: { requestNumber: string; staffName: string; destination: string };
+    trip?: { status: string };
+  } | null;
+  recentTrips?: {
+    id: string;
+    status: string;
+    calculatedDistance?: number;
+    startedAt?: string;
+    endedAt?: string;
+    vehicle: { registrationNumber: string; manufacturer: string; model: string };
+    request?: { requestNumber: string; staffName: string; destination: string };
+    allocation: { purpose: string; destination?: string };
+  }[];
 };
 
 export default function DashboardPage() {
@@ -45,7 +91,9 @@ export default function DashboardPage() {
     [],
   );
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(async (response) => (response.ok ? response.json() : null))
@@ -71,7 +119,9 @@ export default function DashboardPage() {
       ) : data?.role === 'ADMIN' ? (
         <AdminDashboard data={data} />
       ) : (
-        <section className="panel"><p>Loading your dashboard…</p></section>
+        <section className="panel">
+          <p>Loading your dashboard…</p>
+        </section>
       )}
     </section>
   );
@@ -79,10 +129,34 @@ export default function DashboardPage() {
 
 function AdminDashboard({ data }: { data: DashboardData | null }) {
   const metrics = [
-    { label: 'Total requests', value: data?.metrics.totalRequests ?? 0, note: 'All submitted requests', icon: ClipboardList, tone: 'green' },
-    { label: 'Pending requests', value: data?.metrics.pendingRequests ?? 0, note: 'Awaiting approval', icon: Clock3, tone: 'amber' },
-    { label: 'Active allocations', value: data?.metrics.activeAllocations ?? 0, note: 'Request-backed assignments', icon: CarFront, tone: 'blue' },
-    { label: 'Completed trips', value: data?.metrics.completedTrips ?? 0, note: 'Finished GPS trips', icon: Route, tone: 'purple' },
+    {
+      label: 'Total requests',
+      value: data?.metrics.totalRequests ?? 0,
+      note: 'All submitted requests',
+      icon: ClipboardList,
+      tone: 'green',
+    },
+    {
+      label: 'Pending requests',
+      value: data?.metrics.pendingRequests ?? 0,
+      note: 'Awaiting approval',
+      icon: Clock3,
+      tone: 'amber',
+    },
+    {
+      label: 'Active allocations',
+      value: data?.metrics.activeAllocations ?? 0,
+      note: 'Request-backed assignments',
+      icon: CarFront,
+      tone: 'blue',
+    },
+    {
+      label: 'Completed trips',
+      value: data?.metrics.completedTrips ?? 0,
+      note: 'Finished GPS trips',
+      icon: Route,
+      tone: 'purple',
+    },
   ];
   return (
     <>
@@ -95,10 +169,13 @@ function AdminDashboard({ data }: { data: DashboardData | null }) {
 
 function StaffDashboard({ data }: { data: DashboardData }) {
   const actionableRequest = useMemo(
-    () => data.myRequests?.find((request) => ['APPROVED', 'ALLOCATED'].includes(request.status)) ?? null,
+    () =>
+      data.myRequests?.find((request) => ['APPROVED', 'ALLOCATED'].includes(request.status)) ??
+      null,
     [data.myRequests],
   );
   const [visibleRequestId, setVisibleRequestId] = useState<string | null>(null);
+  const [ratingTrip, setRatingTrip] = useState(data.pendingRating ?? null);
 
   useEffect(() => {
     if (!actionableRequest) {
@@ -115,18 +192,44 @@ function StaffDashboard({ data }: { data: DashboardData }) {
 
   function dismissRequestModal() {
     if (actionableRequest) {
-      window.localStorage.setItem(`staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`, 'dismissed');
+      window.localStorage.setItem(
+        `staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`,
+        'dismissed',
+      );
     }
     setVisibleRequestId(null);
   }
 
-  const currentTransport = data.myRequests?.find((request) => request.status === 'ALLOCATED' && request.allocations[0]) ?? null;
+  const currentTransport =
+    data.myRequests?.find((request) => request.status === 'ALLOCATED' && request.allocations[0]) ??
+    null;
   const latestRequest = currentTransport ?? data.myRequests?.[0] ?? null;
-  const approvedByFleet = (data.metrics.approvedRequests ?? 0) + (data.metrics.allocatedRequests ?? 0) + (data.metrics.completedRequests ?? 0);
+  const approvedByFleet =
+    (data.metrics.approvedRequests ?? 0) +
+    (data.metrics.allocatedRequests ?? 0) +
+    (data.metrics.completedRequests ?? 0);
   const metrics = [
-    { label: 'My requests', value: data.metrics.totalRequests ?? 0, note: 'All transport requests submitted by you', icon: ClipboardList, tone: 'green' },
-    { label: 'Approved by fleet', value: approvedByFleet, note: 'Approved, assigned, or completed', icon: CheckCircle2, tone: 'blue' },
-    { label: 'Trips completed', value: data.metrics.completedRequests ?? 0, note: 'Completed transport trips', icon: Route, tone: 'purple' },
+    {
+      label: 'My requests',
+      value: data.metrics.totalRequests ?? 0,
+      note: 'All transport requests submitted by you',
+      icon: ClipboardList,
+      tone: 'green',
+    },
+    {
+      label: 'Approved by fleet',
+      value: approvedByFleet,
+      note: 'Approved, assigned, or completed',
+      icon: CheckCircle2,
+      tone: 'blue',
+    },
+    {
+      label: 'Trips completed',
+      value: data.metrics.completedRequests ?? 0,
+      note: 'Completed transport trips',
+      icon: Route,
+      tone: 'purple',
+    },
   ];
 
   return (
@@ -134,52 +237,279 @@ function StaffDashboard({ data }: { data: DashboardData }) {
       <MetricGrid metrics={metrics} />
       <section className="dashboard-grid">
         <article className="panel">
-          <div className="panel-heading"><div><h2>{currentTransport ? 'Current transport assignment' : 'Latest request update'}</h2><p>{currentTransport ? 'Your approved transport, driver and vehicle details.' : 'Your most recent transport request.'}</p></div></div>
+          <div className="panel-heading">
+            <div>
+              <h2>{currentTransport ? 'Current transport assignment' : 'Latest request update'}</h2>
+              <p>
+                {currentTransport
+                  ? 'Your approved transport, driver and vehicle details.'
+                  : 'Your most recent transport request.'}
+              </p>
+            </div>
+          </div>
           {latestRequest ? (
             <StaffRequestUpdate request={latestRequest} />
           ) : (
-            <Empty icon={<ClipboardList size={28} />} title="No request yet" text="Submit a vehicle request when you need official transport." />
+            <Empty
+              icon={<ClipboardList size={28} />}
+              title="No request yet"
+              text="Submit a vehicle request when you need official transport."
+            />
           )}
         </article>
         <article className="panel">
-          <div className="panel-heading"><div><h2>My requests</h2><p>Simple status history for your transport requests.</p></div></div>
+          <div className="panel-heading">
+            <div>
+              <h2>My requests</h2>
+              <p>Simple status history for your transport requests.</p>
+            </div>
+          </div>
           {data.myRequests?.length ? (
             <div className="notification-list">
               {data.myRequests.map((request) => (
                 <div className="notification-item" key={request.id}>
                   <span>
                     <strong>{request.requestNumber}</strong>
-                    <small>{staffStatusLabel(request.status)} · {request.destination}</small>
-                    {request.allocations[0] && <small>{request.allocations[0].vehicle.registrationNumber} · {request.allocations[0].driver.staffName}</small>}
+                    <small>
+                      {staffStatusLabel(request.status)} · {request.destination}
+                    </small>
+                    {request.allocations[0] && (
+                      <small>
+                        {request.allocations[0].vehicle.registrationNumber} ·{' '}
+                        {request.allocations[0].driver.staffName}
+                      </small>
+                    )}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <Empty icon={<ClipboardList size={28} />} title="No requests yet" text="Submit a vehicle request to begin the approval workflow." />
+            <Empty
+              icon={<ClipboardList size={28} />}
+              title="No requests yet"
+              text="Submit a vehicle request to begin the approval workflow."
+            />
           )}
         </article>
       </section>
       {actionableRequest && visibleRequestId === actionableRequest.id && (
         <StaffRequestStatusModal request={actionableRequest} onClose={dismissRequestModal} />
       )}
+      {ratingTrip && <DriverRatingModal trip={ratingTrip} onClose={() => setRatingTrip(null)} />}
     </>
+  );
+}
+
+function DriverRatingModal({
+  trip,
+  onClose,
+}: {
+  trip: NonNullable<DashboardData['pendingRating']>;
+  onClose: () => void;
+}) {
+  const [stars, setStars] = useState(0);
+  const [likedTrip, setLikedTrip] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!stars || likedTrip === null)
+      return setError('Select a journey rating and overall experience.');
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    const response = await fetch(`/api/driver-ratings/${trip.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stars,
+        likedTrip,
+        remark: form.get('remark'),
+        complaint: form.get('complaint'),
+      }),
+    });
+    setSaving(false);
+    if (!response.ok) return setError('Your rating could not be saved. Please try again.');
+    onClose();
+  }
+
+  return (
+    <div className="master-modal-backdrop">
+      <section className="driver-rating-modal" role="dialog" aria-modal="true">
+        <header>
+          <div>
+            <small>TRIP COMPLETED</small>
+            <h2>Rate your driver</h2>
+            <p>
+              {trip.driver.staffName} · {trip.vehicle.registrationNumber} ·{' '}
+              {trip.request?.destination}
+            </p>
+          </div>
+          <button type="button" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </header>
+        <form onSubmit={submit}>
+          <RatingStars label="Driver trip journey rating" value={stars} onChange={setStars} />
+          <fieldset>
+            <legend>Did you like the trip?</legend>
+            <div className="rating-choice">
+              <button
+                type="button"
+                className={likedTrip === true ? 'active' : ''}
+                onClick={() => setLikedTrip(true)}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                className={likedTrip === false ? 'active negative' : ''}
+                onClick={() => setLikedTrip(false)}
+              >
+                No
+              </button>
+            </div>
+          </fieldset>
+          <label>
+            <span>Remark (optional)</span>
+            <textarea
+              name="remark"
+              rows={3}
+              maxLength={1000}
+              placeholder="Tell us briefly about the journey"
+            />
+          </label>
+          <label>
+            <span>Complaint (optional)</span>
+            <textarea
+              name="complaint"
+              rows={3}
+              maxLength={1500}
+              placeholder="Report any concern that needs attention"
+            />
+          </label>
+          {error && <p className="driver-rating-error">{error}</p>}
+          <footer>
+            <button type="button" className="secondary-action" onClick={onClose}>
+              Later
+            </button>
+            <button className="primary-action" disabled={saving}>
+              {saving ? 'Saving…' : 'Submit rating'}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function RatingStars({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <fieldset className="rating-stars">
+      <legend>{label}</legend>
+      <div>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            className={star <= value ? 'active' : ''}
+            onClick={() => onChange(star)}
+            aria-label={`${star} star${star === 1 ? '' : 's'}`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
 function StaffRequestUpdate({ request }: { request: StaffRequest }) {
   const allocation = request.allocations[0];
-  if (!allocation) return <div className="staff-transport-summary"><div><strong>{request.requestNumber}</strong><em>{staffStatusLabel(request.status)}</em></div><p><span>Destination</span>{request.destination}</p><small>Fleet will add a driver and vehicle once transport is assigned.</small></div>;
-  return <div className="staff-transport-summary"><div><strong>{request.requestNumber}</strong><em>{staffStatusLabel(request.status)}</em></div><p><span>Destination</span>{request.destination}</p><div className="staff-transport-details"><span><small>Driver</small><strong>{allocation.driver.staffName}</strong></span><span><small>Driver ID</small><strong>{allocation.driver.employeeId}</strong></span><span><small>Phone number</small><strong>{allocation.driver.phone}</strong></span><span><small>Vehicle plate</small><strong>{allocation.vehicle.registrationNumber}</strong></span><span><small>Vehicle type</small><strong>{`${allocation.vehicle.manufacturer} ${allocation.vehicle.model}`.trim()}</strong></span><span><small>Assignment</small><strong>{allocation.status.replaceAll('_', ' ')}</strong></span></div></div>;
+  if (!allocation)
+    return (
+      <div className="staff-transport-summary">
+        <div>
+          <strong>{request.requestNumber}</strong>
+          <em>{staffStatusLabel(request.status)}</em>
+        </div>
+        <p>
+          <span>Destination</span>
+          {request.destination}
+        </p>
+        <small>Fleet will add a driver and vehicle once transport is assigned.</small>
+      </div>
+    );
+  return (
+    <div className="staff-transport-summary">
+      <div>
+        <strong>{request.requestNumber}</strong>
+        <em>{staffStatusLabel(request.status)}</em>
+      </div>
+      <p>
+        <span>Destination</span>
+        {request.destination}
+      </p>
+      <div className="staff-transport-details">
+        <span>
+          <small>Driver</small>
+          <strong>{allocation.driver.staffName}</strong>
+        </span>
+        <span>
+          <small>Driver ID</small>
+          <strong>{allocation.driver.employeeId}</strong>
+        </span>
+        <span>
+          <small>Phone number</small>
+          <strong>{allocation.driver.phone}</strong>
+        </span>
+        <span>
+          <small>Vehicle plate</small>
+          <strong>{allocation.vehicle.registrationNumber}</strong>
+        </span>
+        <span>
+          <small>Vehicle type</small>
+          <strong>{`${allocation.vehicle.manufacturer} ${allocation.vehicle.model}`.trim()}</strong>
+        </span>
+        <span>
+          <small>Assignment</small>
+          <strong>{allocation.status.replaceAll('_', ' ')}</strong>
+        </span>
+      </div>
+    </div>
+  );
 }
 
-function StaffRequestStatusModal({ request, onClose }: { request: StaffRequest; onClose: () => void }) {
+function StaffRequestStatusModal({
+  request,
+  onClose,
+}: {
+  request: StaffRequest;
+  onClose: () => void;
+}) {
   const allocation = request.allocations[0];
   const allocated = request.status === 'ALLOCATED' && allocation;
   return (
     <div className="master-modal-backdrop">
-      <section className="staff-request-status-modal" role="dialog" aria-modal="true" aria-labelledby="staff-request-status-title">
-        <button className="staff-request-status-close" aria-label="Close request status update" onClick={onClose}>
+      <section
+        className="staff-request-status-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="staff-request-status-title"
+      >
+        <button
+          className="staff-request-status-close"
+          aria-label="Close request status update"
+          onClick={onClose}
+        >
           <X size={18} />
         </button>
         <div className="staff-request-status-icon">
@@ -190,23 +520,49 @@ function StaffRequestStatusModal({ request, onClose }: { request: StaffRequest; 
           {allocated ? 'Your transport is ready' : 'Your request has been approved'}
         </h2>
         <p>
-          Request <strong>{request.requestNumber}</strong> for <strong>{request.destination}</strong> is now{' '}
+          Request <strong>{request.requestNumber}</strong> for{' '}
+          <strong>{request.destination}</strong> is now{' '}
           <strong>{staffStatusLabel(request.status)}</strong>.
         </p>
         {allocated ? (
           <div className="staff-request-status-grid">
-            <span><small>Vehicle plate</small><strong>{allocation.vehicle.registrationNumber}</strong></span>
-            <span><small>Vehicle type</small><strong>{`${allocation.vehicle.manufacturer} ${allocation.vehicle.model}`.trim()}</strong></span>
-            <span><small>Driver</small><strong>{allocation.driver.staffName}</strong></span>
-            <span><small>Driver ID</small><strong>{allocation.driver.employeeId}</strong></span>
-            <span><small>Phone number</small><strong>{allocation.driver.phone}</strong></span>
-            <span><small>Assignment</small><strong>{allocation.status.replaceAll('_', ' ')}</strong></span>
+            <span>
+              <small>Vehicle plate</small>
+              <strong>{allocation.vehicle.registrationNumber}</strong>
+            </span>
+            <span>
+              <small>Vehicle type</small>
+              <strong>
+                {`${allocation.vehicle.manufacturer} ${allocation.vehicle.model}`.trim()}
+              </strong>
+            </span>
+            <span>
+              <small>Driver</small>
+              <strong>{allocation.driver.staffName}</strong>
+            </span>
+            <span>
+              <small>Driver ID</small>
+              <strong>{allocation.driver.employeeId}</strong>
+            </span>
+            <span>
+              <small>Phone number</small>
+              <strong>{allocation.driver.phone}</strong>
+            </span>
+            <span>
+              <small>Assignment</small>
+              <strong>{allocation.status.replaceAll('_', ' ')}</strong>
+            </span>
           </div>
         ) : (
-          <div className="modal-alert info">Fleet admin has approved the request. Vehicle and driver allocation will appear here once assigned.</div>
+          <div className="modal-alert info">
+            Fleet admin has approved the request. Vehicle and driver allocation will appear here
+            once assigned.
+          </div>
         )}
         <footer>
-          <button className="primary-action" onClick={onClose}>Okay, got it</button>
+          <button className="primary-action" onClick={onClose}>
+            Okay, got it
+          </button>
         </footer>
       </section>
     </div>
@@ -215,12 +571,41 @@ function StaffRequestStatusModal({ request, onClose }: { request: StaffRequest; 
 
 function DriverDashboard({ data }: { data: DashboardData }) {
   const metrics = [
-    { label: 'Assignments', value: data.metrics.totalAssignments ?? 0, note: 'Request-backed allocations', icon: ClipboardList, tone: 'green' },
-    { label: 'Completed trips', value: data.metrics.completedTrips ?? 0, note: 'Finished trips', icon: CheckCircle2, tone: 'blue' },
-    { label: 'Active trips', value: data.metrics.activeTrips ?? 0, note: 'Currently in progress', icon: Navigation, tone: 'amber' },
-    { label: 'Distance', value: `${(data.metrics.totalDistance ?? 0).toFixed(2)} km`, note: 'Recent recorded distance', icon: Route, tone: 'purple' },
+    {
+      label: 'Assignments',
+      value: data.metrics.totalAssignments ?? 0,
+      note: 'Request-backed allocations',
+      icon: ClipboardList,
+      tone: 'green',
+    },
+    {
+      label: 'Completed trips',
+      value: data.metrics.completedTrips ?? 0,
+      note: 'Finished trips',
+      icon: CheckCircle2,
+      tone: 'blue',
+    },
+    {
+      label: 'Active trips',
+      value: data.metrics.activeTrips ?? 0,
+      note: 'Currently in progress',
+      icon: Navigation,
+      tone: 'amber',
+    },
+    {
+      label: 'Distance',
+      value: `${(data.metrics.totalDistance ?? 0).toFixed(2)} km`,
+      note: 'Recent recorded distance',
+      icon: Route,
+      tone: 'purple',
+    },
   ];
-  return <><MetricGrid metrics={metrics} /><DriverTripDashboard /></>;
+  return (
+    <>
+      <MetricGrid metrics={metrics} />
+      <DriverTripDashboard />
+    </>
+  );
   /*
   return (
     <>
@@ -240,8 +625,37 @@ function DriverDashboard({ data }: { data: DashboardData }) {
   */
 }
 
-function MetricGrid({ metrics }: { metrics: { label: string; value: number | string; note: string; icon: LucideIcon; tone: string }[] }) {
-  return <section className="metric-grid">{metrics.map((m) => { const Icon = m.icon; return <article className="metric-card" key={m.label}><div className={`metric-icon ${m.tone}`}><Icon size={20} /></div><div><p>{m.label}</p><strong>{m.value}</strong><small>{m.note}</small></div><ArrowUpRight className="metric-arrow" size={17} /></article>; })}</section>;
+function MetricGrid({
+  metrics,
+}: {
+  metrics: {
+    label: string;
+    value: number | string;
+    note: string;
+    icon: LucideIcon;
+    tone: string;
+  }[];
+}) {
+  return (
+    <section className="metric-grid">
+      {metrics.map((m) => {
+        const Icon = m.icon;
+        return (
+          <article className="metric-card" key={m.label}>
+            <div className={`metric-icon ${m.tone}`}>
+              <Icon size={20} />
+            </div>
+            <div>
+              <p>{m.label}</p>
+              <strong>{m.value}</strong>
+              <small>{m.note}</small>
+            </div>
+            <ArrowUpRight className="metric-arrow" size={17} />
+          </article>
+        );
+      })}
+    </section>
+  );
 }
 
 /* Replaced by the embedded analytics workspace and ApprovalQueue above.
@@ -260,25 +674,65 @@ function ApprovalQueue({ data }: { data: DashboardData | null }) {
 
 */
 function Empty({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
-  return <div className="empty-compact">{icon}<strong>{title}</strong><span>{text}</span></div>;
+  return (
+    <div className="empty-compact">
+      {icon}
+      <strong>{title}</strong>
+      <span>{text}</span>
+    </div>
+  );
 }
 
 function ApprovalQueue({ data }: { data: DashboardData | null }) {
-  return <section className="dashboard-grid"><article className="panel"><div className="panel-heading"><div><h2>Approval queue</h2><p>Requests requiring attention.</p></div></div>{data?.approvalQueue.length ? <div className="notification-list">{data.approvalQueue.map((item) => <div className="notification-item" key={item.id}><span><strong>{item.requestNumber}</strong><small>{item.staffName} · {item.destination}</small></span></div>)}</div> : <Empty icon={<CheckCircle2 size={28} />} title="No pending requests" text="New pending approvals will appear here." />}</article></section>;
+  return (
+    <section className="dashboard-grid">
+      <article className="panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Approval queue</h2>
+            <p>Requests requiring attention.</p>
+          </div>
+        </div>
+        {data?.approvalQueue.length ? (
+          <div className="notification-list">
+            {data.approvalQueue.map((item) => (
+              <div className="notification-item" key={item.id}>
+                <span>
+                  <strong>{item.requestNumber}</strong>
+                  <small>
+                    {item.staffName} · {item.destination}
+                  </small>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty
+            icon={<CheckCircle2 size={28} />}
+            title="No pending requests"
+            text="New pending approvals will appear here."
+          />
+        )}
+      </article>
+    </section>
+  );
 }
 
 function staffStatusLabel(status: string) {
-  return {
-    PENDING_APPROVAL: 'Submitted for review',
-    APPROVED: 'Approved',
-    ALLOCATED: 'Transport assigned',
-    COMPLETED: 'Trip completed',
-    REJECTED: 'Rejected',
-  }[status] ?? status.replaceAll('_', ' ');
+  return (
+    {
+      PENDING_APPROVAL: 'Submitted for review',
+      APPROVED: 'Approved',
+      ALLOCATED: 'Transport assigned',
+      COMPLETED: 'Trip completed',
+      REJECTED: 'Rejected',
+    }[status] ?? status.replaceAll('_', ' ')
+  );
 }
 
 function description(roleCode?: string) {
-  if (roleCode === 'DRIVER') return 'Your approved request-backed assignments, completed trips and live trip status.';
+  if (roleCode === 'DRIVER')
+    return 'Your approved request-backed assignments, completed trips and live trip status.';
   if (roleCode === 'ST') return 'Your vehicle request status and transport updates.';
   return 'Fleet requests, allocations, trips and operational activity.';
 }

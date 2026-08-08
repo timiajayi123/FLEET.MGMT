@@ -19,6 +19,7 @@ import { AiModule } from './ai/ai.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { FuelModule } from './fuel/fuel.module';
 import { SpeedModule } from './speed/speed.module';
+import { RatingsModule } from './ratings/ratings.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { SpeedModule } from './speed/speed.module';
     MaintenanceModule,
     FuelModule,
     SpeedModule,
+    RatingsModule,
   ],
 })
 export class AppModule {}

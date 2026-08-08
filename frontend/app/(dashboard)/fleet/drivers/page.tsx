@@ -1,7 +1,7 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
-import { CarFront, Download, Eye, Gauge, Pencil, Route, Search, Trash2 } from 'lucide-react';
+import { CarFront, Download, Eye, Gauge, Pencil, Route, Search, Star, Trash2 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 type Driver = {
@@ -53,6 +53,8 @@ type DriverDetails = {
     activeTrips: number;
     averageSpeed: number | null;
     totalDistance: number;
+    rating: number | null;
+    ratingCount: number;
   };
 };
 
@@ -393,6 +395,15 @@ function DriverDetailsModal({ details, onClose }: { details: DriverDetails; onCl
             <Route size={18} />
             <span>Distance recorded</span>
             <strong>{summary.totalDistance.toFixed(2)} km</strong>
+          </div>
+          <div>
+            <Star size={18} />
+            <span>Driver rating</span>
+            <strong>
+              {summary.rating == null
+                ? 'No ratings'
+                : `${summary.rating.toFixed(1)} / 5 (${summary.ratingCount})`}
+            </strong>
           </div>
         </div>
         <div className="driver-detail-content">
