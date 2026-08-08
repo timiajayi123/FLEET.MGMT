@@ -56,12 +56,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     setSidebarCollapsed(shouldAutoCollapseSidebar(pathname));
   }, [pathname]);
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(async (r) => (r.ok ? r.json() : null))
-      .then((p) => setUser(p?.user ?? null))
-      .catch(() => undefined)
-      .finally(() => setAuthLoaded(true));
-  }, []);
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(async (response) => {
+        if (response.status === 401 || response.status === 403) {
+          router.replace('/login');
+          return null;
+        }
+        if (!response.ok) throw new Error('Unable to verify session.');
+        return response.json();
+      })
+      .then((payload) => {
+        if (!payload) return;
+        if (!payload.user) {
+          router.replace('/login');
+          return;
+        }
+        setUser(payload.user);
+        setAuthLoaded(true);
+      })
+      .catch(() => setAuthLoaded(true));
+  }, [router]);
   useEffect(() => {
     if (!user) return;
     fetch('/api/dashboard?days=30')
