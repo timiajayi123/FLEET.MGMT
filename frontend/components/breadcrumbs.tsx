@@ -26,7 +26,6 @@ export function Breadcrumbs() {
     const reportLabels: Record<string, string> = {
       requests: 'Vehicle Request Report',
       trips: 'Trip Report',
-      drivers: 'Driver Activity Report',
       'driver-performance': 'Driver Performance Report',
       speed: 'Speed Violation Report',
       utilisation: 'Vehicle Utilisation Report',

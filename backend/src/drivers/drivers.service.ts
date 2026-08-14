@@ -63,7 +63,16 @@ export class DriversService {
     const driver = await this.prisma.driver.findUnique({ where: { id }, select });
     if (!driver) throw new NotFoundException('Driver not found.');
 
-    const [allocations, trips, completedTrips, activeTrips, ratings] =
+    const [
+      allocations,
+      trips,
+      requestTrips,
+      completedRequestTrips,
+      standaloneTrips,
+      completedStandaloneTrips,
+      activeTrips,
+      ratings,
+    ] =
       await this.prisma.$transaction([
         this.prisma.vehicleAllocation.findMany({
           where: { driverId: id },
@@ -94,7 +103,16 @@ export class DriversService {
           _avg: { averageSpeed: true },
           _sum: { calculatedDistance: true },
         }),
-        this.prisma.trip.count({ where: { driverId: id, status: 'COMPLETED' } }),
+        this.prisma.vehicleAllocation.count({
+          where: { driverId: id, requestId: { not: null }, status: { not: 'CANCELLED' } },
+        }),
+        this.prisma.vehicleAllocation.count({
+          where: { driverId: id, requestId: { not: null }, status: 'COMPLETED' },
+        }),
+        this.prisma.trip.count({ where: { driverId: id, requestId: null } }),
+        this.prisma.trip.count({
+          where: { driverId: id, requestId: null, status: 'COMPLETED' },
+        }),
         this.prisma.trip.count({ where: { driverId: id, status: 'IN_PROGRESS' } }),
         this.prisma.driverRating.aggregate({
           where: { driverId: id },
@@ -113,8 +131,8 @@ export class DriversService {
       vehicles: uniqueVehicles,
       allocations,
       summary: {
-        totalTrips: trips._count._all,
-        completedTrips,
+        totalTrips: requestTrips + standaloneTrips,
+        completedTrips: completedRequestTrips + completedStandaloneTrips,
         activeTrips,
         averageSpeed: trips._avg.averageSpeed,
         totalDistance: trips._sum.calculatedDistance ?? 0,

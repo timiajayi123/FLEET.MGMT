@@ -36,7 +36,7 @@ export class RatingsService {
   }
 
   async list() {
-    const [drivers, recentRatings] = await Promise.all([
+    const [drivers, recentRatings, goodRatings, badRatings] = await Promise.all([
       this.prisma.driver.findMany({
         orderBy: { staffName: 'asc' },
         select: {
@@ -51,7 +51,7 @@ export class RatingsService {
       }),
       this.prisma.driverRating.findMany({
         orderBy: { createdAt: 'desc' },
-        take: 100,
+        take: 1000,
         select: {
           id: true,
           stars: true,
@@ -64,6 +64,8 @@ export class RatingsService {
           trip: { select: { vehicle: { select: { registrationNumber: true } } } },
         },
       }),
+      this.prisma.driverRating.count({ where: { stars: { gte: 4 } } }),
+      this.prisma.driverRating.count({ where: { stars: { lte: 3 } } }),
     ]);
     const driverRatings = drivers.map(({ ratings, ...driver }) => {
       const total = ratings.reduce((sum, rating) => sum + rating.stars, 0);
@@ -80,6 +82,8 @@ export class RatingsService {
         totalDrivers: driverRatings.length,
         ratedDrivers: ratedDrivers.length,
         totalRatings,
+        goodRatings,
+        badRatings,
       },
       drivers: driverRatings,
       recentRatings,

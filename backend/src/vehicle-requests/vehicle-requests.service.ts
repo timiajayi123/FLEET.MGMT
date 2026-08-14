@@ -55,6 +55,12 @@ export class VehicleRequestsService {
     const departureDate = new Date(dto.departureDate);
     const expectedReturnDate = new Date(dto.expectedReturnDate);
 
+    if (departureDate.getTime() <= Date.now()) {
+      throw new BadRequestException(
+        'The selected departure date and time has already passed. Choose a future time.',
+      );
+    }
+
     if (expectedReturnDate <= departureDate) {
       throw new BadRequestException('Expected return date must be after departure date.');
     }

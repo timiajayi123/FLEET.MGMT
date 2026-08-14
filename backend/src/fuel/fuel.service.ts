@@ -18,7 +18,7 @@ type SessionUser = {
   locationId?: string | null;
 };
 const MANAGERS = ['S_ADMIN', 'FM'];
-const APPROVAL_STAGES = ['FLEET_SUPERVISOR', 'FLEET_MANAGER'];
+const APPROVAL_STAGE = 'FLEET_MANAGER';
 const RECORDED_STATUSES = ['APPROVED', 'POSTED', 'FINANCE_PENDING'];
 const REVIEWABLE_STATUSES = ['FLEET_SUPERVISOR_PENDING', 'FLEET_MANAGER_PENDING'];
 const DECIMAL = (value: number | null | undefined, scale = 4) =>
@@ -245,7 +245,7 @@ export class FuelService {
       distance,
     });
     const submitting = dto.submit !== false;
-    const approvalStatus = submitting ? 'FLEET_SUPERVISOR_PENDING' : 'DRAFT';
+    const approvalStatus = submitting ? 'FLEET_MANAGER_PENDING' : 'DRAFT';
     const entry = await this.prisma.$transaction(async (tx) => {
       const created = await tx.fuelEntry.create({
         data: {
@@ -322,7 +322,7 @@ export class FuelService {
       });
       if (submitting)
         await tx.fuelApproval.create({
-          data: { fuelEntryId: created.id, stage: APPROVAL_STAGES[0], status: 'PENDING' },
+          data: { fuelEntryId: created.id, stage: APPROVAL_STAGE, status: 'PENDING' },
         });
       for (const alert of validationAlerts)
         await tx.fuelAlert.create({ data: { fuelEntryId: created.id, ...alert } });
@@ -367,8 +367,8 @@ export class FuelService {
     if (dto.decision === 'REJECT' && !dto.comment)
       throw new BadRequestException('A rejection reason is required.');
     return this.prisma.$transaction(async (tx) => {
-      await tx.fuelApproval.update({
-        where: { id: current.id },
+      const recordedDecision = await tx.fuelApproval.updateMany({
+        where: { id: current.id, status: 'PENDING' },
         data: {
           status: dto.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
           comment: dto.comment || null,
@@ -376,26 +376,18 @@ export class FuelService {
           actedAt: new Date(),
         },
       });
+      if (recordedDecision.count !== 1)
+        throw new BadRequestException('This fuel entry has already been reviewed.');
       if (dto.decision === 'REJECT') {
         await tx.fuelEntry.update({
           where: { id },
           data: { approvalStatus: 'REJECTED', entryStatus: 'REJECTED' },
         });
       } else {
-        const currentStageIndex = APPROVAL_STAGES.indexOf(current.stage);
-        const next =
-          currentStageIndex >= 0 ? APPROVAL_STAGES[currentStageIndex + 1] : undefined;
-        if (next) {
-          await tx.fuelApproval.create({
-            data: { fuelEntryId: id, stage: next, status: 'PENDING' },
-          });
-          await tx.fuelEntry.update({ where: { id }, data: { approvalStatus: `${next}_PENDING` } });
-        } else {
-          await tx.fuelEntry.update({
-            where: { id },
-            data: { approvalStatus: 'APPROVED', entryStatus: 'APPROVED', approvedAt: new Date() },
-          });
-        }
+        await tx.fuelEntry.update({
+          where: { id },
+          data: { approvalStatus: 'APPROVED', entryStatus: 'APPROVED', approvedAt: new Date() },
+        });
       }
       await tx.fuelAuditLog.create({
         data: {

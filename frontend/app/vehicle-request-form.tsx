@@ -14,7 +14,10 @@ const apiPath = (path: string) => `${API_URL}${path.startsWith('/') ? path : `/$
 
 export function VehicleRequestForm({ embedded = false }: { embedded?: boolean }) {
   const [state, setState] = useState<SubmissionState>({ type: 'idle' });
+  const [departureError, setDepartureError] = useState('');
   const [dateError, setDateError] = useState('');
+  const [departureMinimum, setDepartureMinimum] = useState(() => localDepartureMinimum());
+  const [departureValue, setDepartureValue] = useState('');
   const [destinationError, setDestinationError] = useState('');
   const [directorateId, setDirectorateId] = useState('');
   const [locationValue, setLocationValue] = useState('');
@@ -41,9 +44,45 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    const refreshMinimum = () => {
+      const minimum = localDepartureMinimum();
+      setDepartureMinimum(minimum);
+      if (departureValue && departureHasPassed(departureValue)) {
+        setDepartureError('The selected departure date and time has already passed. Choose a future time.');
+      }
+    };
+    const timer = window.setInterval(refreshMinimum, 30_000);
+    window.addEventListener('focus', refreshMinimum);
+    document.addEventListener('visibilitychange', refreshMinimum);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshMinimum);
+      document.removeEventListener('visibilitychange', refreshMinimum);
+    };
+  }, [departureValue]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
+    const departureInput = form.elements.namedItem('departureDate');
+
+    if (
+      departureInput instanceof HTMLInputElement &&
+      departureInput.value &&
+      departureHasPassed(departureInput.value)
+    ) {
+      const message =
+        'The selected departure date and time has already passed. Choose a future time.';
+      departureInput.setCustomValidity(message);
+      setDepartureError(message);
+      setState({ type: 'error', message });
+      departureInput.reportValidity();
+      departureInput.focus();
+      departureInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (departureInput instanceof HTMLInputElement) departureInput.setCustomValidity('');
 
     if (!form.reportValidity()) return;
 
@@ -108,12 +147,20 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       setLocationValue('');
       setDepartmentValue('');
       setDestinationValue('');
+      setDepartureValue('');
+      setDepartureError('');
+      setDateError('');
       setDestinationError('');
       setState({ type: 'success', requestNumber: payload.requestNumber });
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'The request could not be submitted.';
+      if (message.toLowerCase().includes('departure') && message.toLowerCase().includes('passed')) {
+        setDepartureError(message);
+      }
       setState({
         type: 'error',
-        message: error instanceof Error ? error.message : 'The request could not be submitted.',
+        message,
       });
     }
   }
@@ -281,7 +328,40 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
               <span>{destinationError}</span>
             </p>
           )}
-          <Field label="Departure Date" name="departureDate" type="datetime-local" />
+          <label className={`field ${departureError ? 'field-invalid' : ''}`}>
+            <span>Departure Date</span>
+            <input
+              name="departureDate"
+              type="datetime-local"
+              required
+              min={departureMinimum}
+              value={departureValue}
+              aria-invalid={Boolean(departureError)}
+              aria-describedby={departureError ? 'departure-date-error' : undefined}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDepartureValue(value);
+                const message =
+                  value && departureHasPassed(value)
+                    ? 'The selected departure date and time has already passed. Choose a future time.'
+                    : '';
+                event.target.setCustomValidity(message);
+                setDepartureError(message);
+                if (!message && state.type === 'error') setState({ type: 'idle' });
+              }}
+              onFocus={() => setDepartureMinimum(localDepartureMinimum())}
+            />
+          </label>
+          {departureError && (
+            <p
+              id="departure-date-error"
+              className="field-validation-error field-wide"
+              role="alert"
+            >
+              <strong>Choose a future departure</strong>
+              <span>{departureError}</span>
+            </p>
+          )}
           <label className={`field ${dateError ? 'field-invalid' : ''}`}>
             <span>Expected Return Date</span>
             <input
@@ -344,7 +424,9 @@ export function VehicleRequestForm({ embedded = false }: { embedded?: boolean })
       </footer>
 
       <div aria-live="polite" aria-atomic="true">
-        {state.type === 'error' && !dateError && <p className="alert error">{state.message}</p>}
+        {state.type === 'error' && !dateError && !departureError && (
+          <p className="alert error">{state.message}</p>
+        )}
       </div>
       {state.type === 'success' && (
         <div className="request-success-backdrop" role="presentation">
@@ -396,6 +478,19 @@ type MasterOption = { id: string; name: string; code: string };
 function sameDestination(from: string, to: string) {
   const normalise = (value: string) => value.trim().toLocaleLowerCase();
   return Boolean(normalise(from) && normalise(to) && normalise(from) === normalise(to));
+}
+
+function localDepartureMinimum(now = new Date()) {
+  const minimum = new Date(now);
+  minimum.setSeconds(0, 0);
+  minimum.setMinutes(minimum.getMinutes() + 1);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${minimum.getFullYear()}-${pad(minimum.getMonth() + 1)}-${pad(minimum.getDate())}T${pad(minimum.getHours())}:${pad(minimum.getMinutes())}`;
+}
+
+function departureHasPassed(value: string, now = new Date()) {
+  const departure = new Date(value);
+  return Number.isFinite(departure.getTime()) && departure.getTime() <= now.getTime();
 }
 
 function useMasterOptions(resource: string, parentId?: string, enabled = true) {

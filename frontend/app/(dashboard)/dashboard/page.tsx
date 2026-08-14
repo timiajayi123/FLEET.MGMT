@@ -78,6 +78,8 @@ type DashboardData = {
   }[];
 };
 
+const RATING_SNOOZE_MS = 4 * 60 * 60 * 1000;
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -195,15 +197,20 @@ function StaffDashboard({ data }: { data: DashboardData }) {
     [data.myRequests],
   );
   const [visibleRequestId, setVisibleRequestId] = useState<string | null>(null);
-  const [ratingTrip, setRatingTrip] = useState(data.pendingRating ?? null);
+  const [ratingTrip, setRatingTrip] = useState<DashboardData['pendingRating']>(null);
 
   useEffect(() => {
     if (!actionableRequest) {
       queueMicrotask(() => setVisibleRequestId(null));
       return;
     }
-    const key = `staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`;
-    if (window.localStorage.getItem(key)) {
+    const key = requestNoticeKey(actionableRequest.id);
+    const dismissed =
+      window.localStorage.getItem(key) ||
+      window.localStorage.getItem(`staff-request-modal:${actionableRequest.id}:APPROVED`) ||
+      window.localStorage.getItem(`staff-request-modal:${actionableRequest.id}:ALLOCATED`);
+    if (dismissed) {
+      window.localStorage.setItem(key, 'dismissed');
       queueMicrotask(() => setVisibleRequestId(null));
       return;
     }
@@ -212,13 +219,31 @@ function StaffDashboard({ data }: { data: DashboardData }) {
 
   function dismissRequestModal() {
     if (actionableRequest) {
-      window.localStorage.setItem(
-        `staff-request-modal:${actionableRequest.id}:${actionableRequest.status}`,
-        'dismissed',
-      );
+      window.localStorage.setItem(requestNoticeKey(actionableRequest.id), 'dismissed');
     }
     setVisibleRequestId(null);
   }
+
+  useEffect(() => {
+    const pending = data.pendingRating ?? null;
+    if (!pending || window.localStorage.getItem(ratingCompletionKey(pending.id))) {
+      queueMicrotask(() => setRatingTrip(null));
+      return;
+    }
+    const snoozeKey = ratingSnoozeKey(pending.id);
+    const snoozedUntil = Number(window.localStorage.getItem(snoozeKey) ?? 0);
+    const remaining = snoozedUntil - Date.now();
+    if (remaining > 0) {
+      queueMicrotask(() => setRatingTrip(null));
+      const timer = window.setTimeout(() => {
+        window.localStorage.removeItem(snoozeKey);
+        setRatingTrip(pending);
+      }, Math.min(remaining, 2_147_483_647));
+      return () => window.clearTimeout(timer);
+    }
+    window.localStorage.removeItem(snoozeKey);
+    queueMicrotask(() => setRatingTrip(pending));
+  }, [data.pendingRating]);
 
   const currentTransport =
     data.myRequests?.find((request) => request.status === 'ALLOCATED' && request.allocations[0]) ??
@@ -315,17 +340,35 @@ function StaffDashboard({ data }: { data: DashboardData }) {
       {actionableRequest && visibleRequestId === actionableRequest.id && (
         <StaffRequestStatusModal request={actionableRequest} onClose={dismissRequestModal} />
       )}
-      {ratingTrip && <DriverRatingModal trip={ratingTrip} onClose={() => setRatingTrip(null)} />}
+      {ratingTrip && (
+        <DriverRatingModal
+          trip={ratingTrip}
+          onLater={() => {
+            window.localStorage.setItem(
+              ratingSnoozeKey(ratingTrip.id),
+              String(Date.now() + RATING_SNOOZE_MS),
+            );
+            setRatingTrip(null);
+          }}
+          onCompleted={() => {
+            window.localStorage.setItem(ratingCompletionKey(ratingTrip.id), 'completed');
+            window.localStorage.removeItem(ratingSnoozeKey(ratingTrip.id));
+            setRatingTrip(null);
+          }}
+        />
+      )}
     </>
   );
 }
 
 function DriverRatingModal({
   trip,
-  onClose,
+  onLater,
+  onCompleted,
 }: {
   trip: NonNullable<DashboardData['pendingRating']>;
-  onClose: () => void;
+  onLater: () => void;
+  onCompleted: () => void;
 }) {
   const [stars, setStars] = useState(0);
   const [likedTrip, setLikedTrip] = useState<boolean | null>(null);
@@ -347,9 +390,17 @@ function DriverRatingModal({
         remark: form.get('remark'),
       }),
     });
+    const payload = await response.json().catch(() => ({}));
     setSaving(false);
-    if (!response.ok) return setError('Your rating could not be saved. Please try again.');
-    onClose();
+    if (!response.ok) {
+      const responseMessage = String(payload.message ?? '');
+      if (responseMessage.toLowerCase().includes('already been rated')) {
+        onCompleted();
+        return;
+      }
+      return setError(responseMessage || 'Your rating could not be saved. Please try again.');
+    }
+    onCompleted();
   }
 
   return (
@@ -363,8 +414,12 @@ function DriverRatingModal({
               {trip.driver.staffName} · {trip.vehicle.registrationNumber} ·{' '}
               {trip.request?.destination}
             </p>
+            <p className="driver-rating-trip-reference">
+              {trip.request?.requestNumber ?? 'Completed trip'}
+              {trip.endedAt ? ` · Completed ${new Date(trip.endedAt).toLocaleString()}` : ''}
+            </p>
           </div>
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={onLater}>
             <X size={18} />
           </button>
         </header>
@@ -400,7 +455,7 @@ function DriverRatingModal({
           </label>
           {error && <p className="driver-rating-error">{error}</p>}
           <footer>
-            <button type="button" className="secondary-action" onClick={onClose}>
+            <button type="button" className="secondary-action" onClick={onLater}>
               Later
             </button>
             <button className="primary-action" disabled={saving}>
@@ -738,6 +793,18 @@ function staffStatusLabel(status: string) {
       REJECTED: 'Rejected',
     }[status] ?? status.replaceAll('_', ' ')
   );
+}
+
+function requestNoticeKey(requestId: string) {
+  return `staff-request-modal:${requestId}:dismissed`;
+}
+
+function ratingCompletionKey(tripId: string) {
+  return `staff-driver-rating:${tripId}:completed`;
+}
+
+function ratingSnoozeKey(tripId: string) {
+  return `staff-driver-rating:${tripId}:snoozed-until`;
 }
 
 function description(roleCode?: string) {

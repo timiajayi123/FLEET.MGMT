@@ -287,7 +287,13 @@ export function MaintenanceWorkspace({ view = 'workspace' }: { view?: 'workspace
   return (
     <>
       <PageHeader
-        title={historyView ? 'Maintenance History' : 'Vehicle Maintenance'}
+        title={
+          historyView
+            ? 'Maintenance History'
+            : canReview === false
+              ? 'Maintenance Request'
+              : 'Vehicle Maintenance'
+        }
         description={
           historyView
             ? 'Review your completed maintenance reports, fleet decisions and final feedback.'

@@ -278,6 +278,131 @@ export class AnalyticsService {
     return { total: rows.length, data: rows };
   }
 
+  async tripReport(filters: AnalyticsFilters) {
+    const completedAt = dateRange(filters);
+    const [allocations, standaloneTrips] = await Promise.all([
+      this.prisma.vehicleAllocation.findMany({
+        where: {
+          requestId: { not: null },
+          status: 'COMPLETED',
+          actualEndAt: completedAt,
+          ...(filters.vehicleId ? { vehicleId: filters.vehicleId } : {}),
+          ...(filters.driverId ? { driverId: filters.driverId } : {}),
+          ...(filters.search
+            ? {
+                OR: [
+                  { request: { requestNumber: { contains: filters.search } } },
+                  { request: { staffName: { contains: filters.search } } },
+                  { request: { destination: { contains: filters.search } } },
+                  { driver: { staffName: { contains: filters.search } } },
+                  { vehicle: { registrationNumber: { contains: filters.search } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          trip: true,
+          driver: { select: { id: true, staffName: true, employeeId: true } },
+          vehicle: {
+            select: {
+              id: true,
+              registrationNumber: true,
+              manufacturer: true,
+              model: true,
+              vehicleType: { select: { name: true } },
+            },
+          },
+          request: {
+            select: {
+              id: true,
+              requestNumber: true,
+              staffName: true,
+              employeeId: true,
+              department: true,
+              purposeOfTrip: true,
+              location: true,
+              destination: true,
+              customPickupLocation: true,
+              customDestination: true,
+              departureDate: true,
+              expectedReturnDate: true,
+            },
+          },
+        },
+        orderBy: [{ actualEndAt: 'desc' }, { createdAt: 'desc' }],
+        take: 1000,
+      }),
+      this.prisma.trip.findMany({
+        where: {
+          requestId: null,
+          status: 'COMPLETED',
+          endedAt: completedAt,
+          ...(filters.vehicleId ? { vehicleId: filters.vehicleId } : {}),
+          ...(filters.driverId ? { driverId: filters.driverId } : {}),
+          ...(filters.search
+            ? {
+                OR: [
+                  { driver: { staffName: { contains: filters.search } } },
+                  { vehicle: { registrationNumber: { contains: filters.search } } },
+                ],
+              }
+            : {}),
+        },
+        include: {
+          driver: { select: { id: true, staffName: true, employeeId: true } },
+          vehicle: {
+            select: {
+              id: true,
+              registrationNumber: true,
+              manufacturer: true,
+              model: true,
+              vehicleType: { select: { name: true } },
+            },
+          },
+          allocation: {
+            select: {
+              id: true,
+              destination: true,
+              purpose: true,
+              startAt: true,
+              expectedEndAt: true,
+              actualStartAt: true,
+              actualEndAt: true,
+            },
+          },
+        },
+        orderBy: [{ endedAt: 'desc' }, { createdAt: 'desc' }],
+        take: 1000,
+      }),
+    ]);
+    const requestJourneys = allocations.map((allocation) => ({
+      id: allocation.trip?.id ?? allocation.id,
+      status: 'COMPLETED',
+      calculatedDistance: allocation.trip?.calculatedDistance ?? null,
+      maximumSpeed: allocation.trip?.maximumSpeed ?? null,
+      averageSpeed: allocation.trip?.averageSpeed ?? null,
+      startedAt: allocation.trip?.startedAt ?? allocation.actualStartAt ?? allocation.startAt,
+      endedAt: allocation.trip?.endedAt ?? allocation.actualEndAt ?? allocation.expectedEndAt,
+      vehicle: allocation.vehicle,
+      driver: allocation.driver,
+      request: allocation.request,
+      allocation: {
+        id: allocation.id,
+        destination: allocation.destination,
+        purpose: allocation.purpose,
+        startAt: allocation.startAt,
+        expectedEndAt: allocation.expectedEndAt,
+        actualStartAt: allocation.actualStartAt,
+        actualEndAt: allocation.actualEndAt,
+      },
+    }));
+    const data = [...requestJourneys, ...standaloneTrips].sort(
+      (first, second) =>
+        new Date(second.endedAt ?? 0).getTime() - new Date(first.endedAt ?? 0).getTime(),
+    );
+    return { total: data.length, data };
+  }
+
   async maintenanceReport(filters: AnalyticsFilters) {
     const rows = await this.prisma.maintenanceRequest.findMany({
       where: {
@@ -339,7 +464,7 @@ export class AnalyticsService {
           }
         : {}),
     };
-    const [drivers, tripGroups, ratingGroups, violationGroups] = await Promise.all([
+    const [drivers, allocationGroups, distanceGroups, ratingGroups, violationGroups] = await Promise.all([
       this.prisma.driver.findMany({
         where: driverWhere,
         select: {
@@ -352,14 +477,22 @@ export class AnalyticsService {
         },
         orderBy: { staffName: 'asc' },
       }),
-      this.prisma.trip.groupBy({
+      this.prisma.vehicleAllocation.groupBy({
         by: ['driverId', 'status'],
         where: {
           requestId: { not: null },
-          createdAt: dateRange(filters),
+          status: { not: 'CANCELLED' },
+          startAt: dateRange(filters),
           ...(filters.driverId ? { driverId: filters.driverId } : {}),
         },
         _count: { _all: true },
+      }),
+      this.prisma.trip.groupBy({
+        by: ['driverId'],
+        where: {
+          createdAt: dateRange(filters),
+          ...(filters.driverId ? { driverId: filters.driverId } : {}),
+        },
         _sum: { calculatedDistance: true },
       }),
       this.prisma.driverRating.groupBy({
@@ -394,14 +527,13 @@ export class AnalyticsService {
       CRITICAL: 10,
     };
     const rows = drivers.map((driver) => {
-      const driverTrips = tripGroups.filter((row) => row.driverId === driver.id);
-      const allocatedTrips = driverTrips.reduce((sum, row) => sum + row._count._all, 0);
-      const completedTrips = driverTrips
+      const driverAllocations = allocationGroups.filter((row) => row.driverId === driver.id);
+      const allocatedTrips = driverAllocations.reduce((sum, row) => sum + row._count._all, 0);
+      const completedTrips = driverAllocations
         .filter((row) => row.status === 'COMPLETED')
         .reduce((sum, row) => sum + row._count._all, 0);
-      const totalDistance = driverTrips.reduce(
-        (sum, row) => sum + Number(row._sum.calculatedDistance ?? 0),
-        0,
+      const totalDistance = Number(
+        distanceGroups.find((row) => row.driverId === driver.id)?._sum.calculatedDistance ?? 0,
       );
       const driverViolations = violationGroups.filter((row) => row.driverId === driver.id);
       const violations = driverViolations.reduce((sum, row) => sum + row._count._all, 0);

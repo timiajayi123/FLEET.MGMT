@@ -22,7 +22,8 @@ export class DashboardService {
       approvedRequests,
       activeUsers,
       activeAllocations,
-      completedTrips,
+      completedRequestTrips,
+      completedStandaloneTrips,
       vehicles,
       drivers,
       activeTrips,
@@ -49,7 +50,10 @@ export class DashboardService {
           ],
         },
       }),
-      this.prisma.trip.count({ where: { status: 'COMPLETED', requestId: { not: null } } }),
+      this.prisma.vehicleAllocation.count({
+        where: { status: 'COMPLETED', requestId: { not: null } },
+      }),
+      this.prisma.trip.count({ where: { status: 'COMPLETED', requestId: null } }),
       this.prisma.vehicle.count(),
       this.prisma.driver.count(),
       this.prisma.trip.count({ where: { status: 'IN_PROGRESS', requestId: { not: null } } }),
@@ -82,6 +86,7 @@ export class DashboardService {
       since,
       recent.map((item) => item.createdAt),
     );
+    const completedTrips = completedRequestTrips + completedStandaloneTrips;
     return {
       role: 'ADMIN',
       metrics: {
@@ -154,9 +159,9 @@ export class DashboardService {
         },
       }),
     ]);
-    const pendingRating = await this.prisma.trip
+    const latestCompletedTrip = await this.prisma.trip
       .findFirst({
-        where: { status: 'COMPLETED', request: { requesterId: user.id }, rating: null },
+        where: { status: 'COMPLETED', request: { requesterId: user.id } },
         orderBy: { endedAt: 'desc' },
         select: {
           id: true,
@@ -164,9 +169,20 @@ export class DashboardService {
           driver: { select: { id: true, staffName: true } },
           vehicle: { select: { registrationNumber: true } },
           request: { select: { requestNumber: true, destination: true } },
+          rating: { select: { id: true } },
         },
       })
       .catch(() => null);
+    const pendingRating =
+      latestCompletedTrip && !latestCompletedTrip.rating
+        ? {
+            id: latestCompletedTrip.id,
+            endedAt: latestCompletedTrip.endedAt,
+            driver: latestCompletedTrip.driver,
+            vehicle: latestCompletedTrip.vehicle,
+            request: latestCompletedTrip.request,
+          }
+        : null;
     return {
       role: 'STAFF',
       metrics: {
@@ -221,9 +237,13 @@ export class DashboardService {
       currentAssignment,
     ] = await Promise.all([
       this.prisma.vehicleAllocation.count({
-        where: { driverId: driver.id, requestId: { not: null } },
+        where: {
+          driverId: driver.id,
+          requestId: { not: null },
+          status: { not: 'CANCELLED' },
+        },
       }),
-      this.prisma.trip.count({
+      this.prisma.vehicleAllocation.count({
         where: { driverId: driver.id, status: 'COMPLETED', requestId: { not: null } },
       }),
       this.prisma.trip.count({

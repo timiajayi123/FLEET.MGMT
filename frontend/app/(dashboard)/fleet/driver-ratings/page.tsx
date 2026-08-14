@@ -1,14 +1,28 @@
 'use client';
 
 import { PageHeader } from '@/components/page-header';
-import { MessageSquareText, Search, Star, Users } from 'lucide-react';
+import { AlertTriangle, MessageSquareText, Search, Star, ThumbsUp, Users } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+
+type Rating = {
+  id: string;
+  stars: number;
+  likedTrip: boolean;
+  remark?: string | null;
+  createdAt: string;
+  driver: { id: string; staffName: string; employeeId: string };
+  ratedBy: { staffName: string };
+  request: { requestNumber: string; destination: string };
+  trip: { vehicle: { registrationNumber: string } };
+};
 
 type RatingData = {
   metrics: {
     totalDrivers: number;
     ratedDrivers: number;
     totalRatings: number;
+    goodRatings: number;
+    badRatings: number;
   };
   drivers: Array<{
     id: string;
@@ -20,17 +34,7 @@ type RatingData = {
     rating: number | null;
     ratingCount: number;
   }>;
-  recentRatings: Array<{
-    id: string;
-    stars: number;
-    likedTrip: boolean;
-    remark?: string | null;
-    createdAt: string;
-    driver: { id: string; staffName: string; employeeId: string };
-    ratedBy: { staffName: string };
-    request: { requestNumber: string; destination: string };
-    trip: { vehicle: { registrationNumber: string } };
-  }>;
+  recentRatings: Rating[];
 };
 
 export default function DriverRatingsPage() {
@@ -60,12 +64,14 @@ export default function DriverRatingsPage() {
         .some((value) => String(value).toLocaleLowerCase().includes(term)),
     );
   }, [data?.drivers, query]);
+  const badRatings = data?.recentRatings.filter((rating) => rating.stars <= 3) ?? [];
+  const goodRatings = data?.recentRatings.filter((rating) => rating.stars >= 4) ?? [];
 
   return (
     <>
       <PageHeader
         title="Driver Ratings"
-        description="See driver ratings and staff remarks."
+        description="Review low ratings and recognise positive driver feedback."
       />
       {error && <div className="master-alert">{error}</div>}
       {!data && !error && (
@@ -78,35 +84,32 @@ export default function DriverRatingsPage() {
           <section className="driver-ratings-kpis">
             <RatingKpi icon={<Users size={19} />} label="Total drivers" value={data.metrics.totalDrivers} />
             <RatingKpi icon={<Star size={19} />} label="Rated drivers" value={data.metrics.ratedDrivers} />
-            <RatingKpi icon={<MessageSquareText size={19} />} label="Ratings" value={data.metrics.totalRatings} />
+            <RatingKpi icon={<MessageSquareText size={19} />} label="All ratings" value={data.metrics.totalRatings} />
+            <RatingKpi icon={<AlertTriangle size={19} />} label="Needs review" value={data.metrics.badRatings} tone="bad" />
+            <RatingKpi icon={<ThumbsUp size={19} />} label="Good ratings" value={data.metrics.goodRatings} tone="good" />
           </section>
 
-          <section className="master-panel driver-ratings-panel">
-            <div className="panel-heading"><div><h2>Recent ratings</h2><p>Latest ratings and remarks.</p></div></div>
-            <div className="master-table-wrap">
-              <table className="master-table driver-rating-feedback-table">
-                <thead><tr><th>Driver</th><th>Rating</th><th>Liked trip</th><th>Remark</th><th>Trip</th><th>Rated by</th><th>Date</th></tr></thead>
-                <tbody>
-                  {data.recentRatings.map((rating) => (
-                    <tr key={rating.id}>
-                      <td><strong>{rating.driver.staffName}</strong><small>{rating.driver.employeeId}</small></td>
-                      <td><RatingValue value={rating.stars} /></td>
-                      <td><span className={rating.likedTrip ? 'rating-positive' : 'rating-negative'}>{rating.likedTrip ? 'Yes' : 'No'}</span></td>
-                      <td className="rating-remark">{rating.remark || 'No remark'}</td>
-                      <td><strong>{rating.request.requestNumber}</strong><small>{rating.trip.vehicle.registrationNumber} · {rating.request.destination}</small></td>
-                      <td>{rating.ratedBy.staffName}</td>
-                      <td>{new Date(rating.createdAt).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!data.recentRatings.length && <div className="master-empty"><Star size={28} /><h3>No ratings yet</h3><p>New ratings will appear here.</p></div>}
-            </div>
-          </section>
+          <RatingFeedbackPanel
+            title="Ratings needing review"
+            description="Journeys rated 1–3 stars. Review these first and follow up where necessary."
+            ratings={badRatings}
+            emptyTitle="No bad ratings"
+            emptyText="Ratings of 1–3 stars will appear here for review."
+            tone="bad"
+          />
+
+          <RatingFeedbackPanel
+            title="Good ratings"
+            description="Journeys rated 4–5 stars and positive driver feedback."
+            ratings={goodRatings}
+            emptyTitle="No good ratings yet"
+            emptyText="Ratings of 4–5 stars will appear here."
+            tone="good"
+          />
 
           <section className="master-panel driver-ratings-panel">
             <div className="panel-heading">
-              <div><h2>All drivers</h2><p>Rating and review count for each driver.</p></div>
+              <div><h2>All drivers</h2><p>Average rating and review count for each driver.</p></div>
               <label className="master-search">
                 <Search size={16} />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search driver, ID or location" />
@@ -130,15 +133,58 @@ export default function DriverRatingsPage() {
               {!drivers.length && <div className="master-empty"><Star size={28} /><h3>No matching drivers</h3><p>Try another search.</p></div>}
             </div>
           </section>
-
         </div>
       )}
     </>
   );
 }
 
-function RatingKpi({ icon, label, value }: { icon: ReactNode; label: string; value: string | number }) {
-  return <article><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>;
+function RatingFeedbackPanel({
+  title,
+  description,
+  ratings,
+  emptyTitle,
+  emptyText,
+  tone,
+}: {
+  title: string;
+  description: string;
+  ratings: Rating[];
+  emptyTitle: string;
+  emptyText: string;
+  tone: 'good' | 'bad';
+}) {
+  return (
+    <section className={`master-panel driver-ratings-panel rating-group-panel ${tone}`}>
+      <div className="panel-heading">
+        <div><h2>{title}</h2><p>{description}</p></div>
+        <span className={`rating-group-count ${tone}`}>{ratings.length}</span>
+      </div>
+      <div className="master-table-wrap">
+        <table className="master-table driver-rating-feedback-table">
+          <thead><tr><th>Driver</th><th>Rating</th><th>Liked trip</th><th>Remark</th><th>Trip</th><th>Rated by</th><th>Date</th></tr></thead>
+          <tbody>
+            {ratings.map((rating) => (
+              <tr key={rating.id}>
+                <td><strong>{rating.driver.staffName}</strong><small>{rating.driver.employeeId}</small></td>
+                <td><RatingValue value={rating.stars} /></td>
+                <td><span className={rating.likedTrip ? 'rating-positive' : 'rating-negative'}>{rating.likedTrip ? 'Yes' : 'No'}</span></td>
+                <td className="rating-remark">{rating.remark || 'No remark'}</td>
+                <td><strong>{rating.request.requestNumber}</strong><small>{rating.trip.vehicle.registrationNumber} · {rating.request.destination}</small></td>
+                <td>{rating.ratedBy.staffName}</td>
+                <td>{new Date(rating.createdAt).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!ratings.length && <div className="master-empty"><Star size={28} /><h3>{emptyTitle}</h3><p>{emptyText}</p></div>}
+      </div>
+    </section>
+  );
+}
+
+function RatingKpi({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string | number; tone?: 'good' | 'bad' }) {
+  return <article className={tone ? `rating-kpi-${tone}` : undefined}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>;
 }
 
 function RatingValue({ value }: { value: number | null }) {

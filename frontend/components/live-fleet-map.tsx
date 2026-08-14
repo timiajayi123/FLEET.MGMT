@@ -2,7 +2,7 @@
 
 import { GpsSpeedometer } from '@/components/gps-speedometer';
 import { loadGoogleMaps, type GoogleMap, type GoogleMapsNamespace, type GoogleMarker } from '@/lib/google-maps';
-import { ChevronUp, Crosshair, Expand, List, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, Search, Square } from 'lucide-react';
+import { ChevronUp, Expand, List, LocateFixed, Map as MapIcon, RefreshCw, Search } from 'lucide-react';
 import { io, type Socket } from 'socket.io-client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -26,7 +26,6 @@ type Position = {
   trip?: { id: string; status: string } | null;
   allocation?: { id: string; status: string; purpose: string; destination?: string; request?: { staffName: string; directorate: string; department: string } } | null;
 };
-type Allocation = { id: string; status: string; destination?: string; vehicle: { registrationNumber: string }; driver: { staffName: string }; trip?: { id: string; status: string } };
 type VehicleIconKind = 'BUS' | 'TRUCK' | 'PICKUP' | 'VAN' | 'SUV' | 'MOTORCYCLE' | 'CAR';
 
 export function LiveFleetMap() {
@@ -35,36 +34,24 @@ export function LiveFleetMap() {
   const mapsRef = useRef<GoogleMapsNamespace | null>(null);
   const markers = useRef(new Map<string, GoogleMarker>());
   const latestPositions = useRef(new Map<string, Position>());
+  const markerHeadings = useRef(new Map<string, number>());
   const info = useRef<InstanceType<GoogleMapsNamespace['InfoWindow']> | null>(null);
   const socket = useRef<Socket | null>(null);
-  const simulator = useRef<number | null>(null);
-  const simulationStep = useRef(0);
   const hasFramedMap = useRef(false);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [mapMessage, setMapMessage] = useState('');
   const [syncAt, setSyncAt] = useState<Date | null>(null);
   const [view, setView] = useState<'MAP' | 'LIST'>('MAP');
-  const [selectedAllocation, setSelectedAllocation] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [simulationRunning, setSimulationRunning] = useState(false);
-  const simulatorEnabled = process.env.NEXT_PUBLIC_ENABLE_GPS_SIMULATOR === 'true' && process.env.NODE_ENV !== 'production';
 
   const load = useCallback(async () => {
-    const [liveResponse, allocationsResponse] = await Promise.all([
-      fetch('/api/fleet/live', { cache: 'no-store' }),
-      fetch('/api/vehicle-allocations', { cache: 'no-store' }),
-    ]);
+    const liveResponse = await fetch('/api/fleet/live', { cache: 'no-store' });
     if (liveResponse.ok) {
       const payload = await liveResponse.json();
       setPositions(payload.data ?? []);
       setSyncAt(new Date(payload.generatedAt ?? Date.now()));
-    }
-    if (allocationsResponse.ok) {
-      const payload = await allocationsResponse.json();
-      setAllocations(payload.data ?? []);
     }
   }, []);
 
@@ -93,7 +80,6 @@ export function LiveFleetMap() {
       window.clearTimeout(initial);
       window.clearInterval(timer);
       client.disconnect();
-      if (simulator.current) window.clearInterval(simulator.current);
     };
   }, [load]);
 
@@ -138,6 +124,15 @@ export function LiveFleetMap() {
     const bounds = new maps.LatLngBounds();
     for (const position of visible) {
       active.add(position.vehicleId);
+      const previousPosition = latestPositions.current.get(position.vehicleId);
+      const displayHeading = resolveVehicleHeading(
+        position,
+        previousPosition,
+        markerHeadings.current.get(position.vehicleId),
+      );
+      if (displayHeading !== undefined) {
+        markerHeadings.current.set(position.vehicleId, displayHeading);
+      }
       latestPositions.current.set(position.vehicleId, position);
       const point = { lat: position.latitude, lng: position.longitude };
       bounds.extend(point);
@@ -161,17 +156,22 @@ export function LiveFleetMap() {
         fontWeight: '900',
         className: 'vehicle-speed-label',
       });
-      marker.setIcon(vehicleMarkerIcon(maps, position));
+      marker.setIcon(vehicleMarkerIcon(maps, position, displayHeading));
     }
     markers.current.forEach((marker, id) => {
       if (!active.has(id)) {
         marker.setMap(null);
         markers.current.delete(id);
         latestPositions.current.delete(id);
+        markerHeadings.current.delete(id);
       }
     });
     if (visible.length && !hasFramedMap.current) {
       map.fitBounds(bounds, 90);
+      maps.event.addListenerOnce(map, 'idle', () => {
+        const openingZoom = map.getZoom();
+        if (openingZoom !== undefined && openingZoom > 13) map.setZoom(13);
+      });
       hasFramedMap.current = true;
     }
   }, [visible]);
@@ -187,36 +187,6 @@ export function LiveFleetMap() {
 
   function fullscreen() {
     mapContainer.current?.requestFullscreen().catch(() => setMapMessage('Full-screen map is unavailable in this browser.'));
-  }
-
-  async function simulatePoint() {
-    const allocation = allocations.find((item) => item.id === selectedAllocation);
-    if (!allocation?.trip) return;
-    const step = simulationStep.current++;
-    const latitude = 9.0765 + step * 0.0012;
-    const longitude = 7.3986 + step * 0.0011;
-    await fetch('/api/driver-tracking/location', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ allocationId: allocation.id, tripId: allocation.trip.id, clientEventId: crypto.randomUUID(), latitude, longitude, speed: 12, heading: 45, accuracy: 8, recordedAt: new Date().toISOString(), isSimulated: true }),
-    });
-    void load();
-  }
-
-  function toggleSimulation() {
-    if (simulationRunning) {
-      if (simulator.current) window.clearInterval(simulator.current);
-      simulator.current = null;
-      setSimulationRunning(false);
-      return;
-    }
-    if (!selectedAllocation) {
-      setMapMessage('Select an in-progress allocation for the simulator.');
-      return;
-    }
-    void simulatePoint();
-    simulator.current = window.setInterval(() => void simulatePoint(), 4000);
-    setSimulationRunning(true);
   }
 
   const counts = {
@@ -248,18 +218,7 @@ export function LiveFleetMap() {
         <button className="secondary-action" onClick={fitVisible}><LocateFixed />Fit</button>
         <button className="secondary-action" onClick={fullscreen}><Expand />Full screen</button>
       </section>
-      {simulatorEnabled && (
-        <section className="simulator-bar">
-          <div><Crosshair /><span><strong>Development GPS simulator</strong><small>Points are visibly marked as simulated and use the production tracking pipeline.</small></span></div>
-          <select value={selectedAllocation} onChange={(event) => setSelectedAllocation(event.target.value)}>
-            <option value="">Select in-progress allocation</option>
-            {allocations.filter((item) => item.status === 'IN_PROGRESS' && item.trip).map((item) => <option key={item.id} value={item.id}>{item.vehicle.registrationNumber} - {item.driver.staffName} - {item.destination}</option>)}
-          </select>
-          <button className={simulationRunning ? 'danger-action' : 'primary-action'} onClick={toggleSimulation}>{simulationRunning ? <><Pause />Pause</> : <><Play />Start simulation</>}</button>
-          {simulationRunning && <button className="secondary-action" onClick={() => { if (simulator.current) window.clearInterval(simulator.current); simulator.current = null; simulationStep.current = 0; setSimulationRunning(false); }}><Square />Stop</button>}
-        </section>
-      )}
-      {mapMessage && <div className="map-setup-message">{mapMessage} The live fleet list and simulator remain available.</div>}
+      {mapMessage && <div className="map-setup-message">{mapMessage} The live fleet list remains available.</div>}
       <section className={`live-map-layout ${view.toLowerCase()}`}>
         <div ref={mapContainer} className="admin-live-map" />
         <aside className="fleet-vehicle-list">
@@ -360,21 +319,25 @@ function vehicleIconLabel(kind: VehicleIconKind) {
   }[kind];
 }
 
-function vehicleMarkerIcon(maps: GoogleMapsNamespace, position: Position) {
+function vehicleMarkerIcon(
+  maps: GoogleMapsNamespace,
+  position: Position,
+  heading?: number,
+) {
   const customUrl = customVehicleIconUrl(position);
   if (customUrl) {
     return {
       url: customUrl,
-      scaledSize: new maps.Size(82, 82),
-      anchor: new maps.Point(41, 41),
-      labelOrigin: new maps.Point(41, -10),
+      scaledSize: new maps.Size(64, 64),
+      anchor: new maps.Point(32, 32),
+      labelOrigin: new maps.Point(32, -8),
     };
   }
 
   return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(vehicleMarkerSvg(vehicleIconKind(position), color(position.connectionStatus)))}`,
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(vehicleMarkerSvg(vehicleIconKind(position), color(position.connectionStatus), heading))}`,
     scaledSize: new maps.Size(88, 88),
-    anchor: new maps.Point(44, 70),
+    anchor: new maps.Point(44, heading === undefined ? 70 : 44),
     labelOrigin: new maps.Point(44, -8),
   };
 }
@@ -394,7 +357,7 @@ function customVehicleIconUrl(position: Position) {
   return '';
 }
 
-function vehicleMarkerSvg(kind: VehicleIconKind, fill: string) {
+function vehicleMarkerSvg(kind: VehicleIconKind, fill: string, heading?: number) {
   const body = {
     BUS: '<rect x="11" y="14" width="42" height="26" rx="5"/><rect x="16" y="18" width="8" height="8" rx="1"/><rect x="28" y="18" width="8" height="8" rx="1"/><rect x="40" y="18" width="8" height="8" rx="1"/>',
     TRUCK: '<rect x="9" y="18" width="28" height="20" rx="4"/><path d="M37 24h9l7 7v7H37z"/><rect x="14" y="22" width="16" height="7" rx="1"/>',
@@ -405,15 +368,56 @@ function vehicleMarkerSvg(kind: VehicleIconKind, fill: string) {
     CAR: '<path d="M8 30l7-10h34l7 10v9H8z"/><rect x="19" y="23" width="10" height="7" rx="1"/><rect x="34" y="23" width="10" height="7" rx="1"/>',
   }[kind];
 
+  const rotation = heading === undefined ? 0 : normalizeHeading(heading) - 90;
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#020617" flood-opacity=".35"/></filter>
-    <g filter="url(#shadow)">
+    <g filter="url(#shadow)" transform="rotate(${rotation} 32 32)">
       <path d="M32 58c4-7 20-12 20-30C52 17 43 8 32 8S12 17 12 28c0 18 16 23 20 30z" fill="#111827"/>
       <g fill="${fill}" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">${body}</g>
       <circle cx="21" cy="40" r="4.5" fill="#111827" stroke="#ffffff" stroke-width="2"/>
       <circle cx="43" cy="40" r="4.5" fill="#111827" stroke="#ffffff" stroke-width="2"/>
     </g>
   </svg>`;
+}
+
+function resolveVehicleHeading(
+  current: Position,
+  previous?: Position,
+  previousHeading?: number,
+) {
+  if (typeof current.heading === 'number' && Number.isFinite(current.heading)) {
+    return normalizeHeading(current.heading);
+  }
+
+  if (
+    previous &&
+    (Math.abs(current.latitude - previous.latitude) > 0.000001 ||
+      Math.abs(current.longitude - previous.longitude) > 0.000001)
+  ) {
+    return bearingBetween(previous, current);
+  }
+
+  return previousHeading;
+}
+
+function bearingBetween(from: Position, to: Position) {
+  const latitude1 = degreesToRadians(from.latitude);
+  const latitude2 = degreesToRadians(to.latitude);
+  const longitudeDelta = degreesToRadians(to.longitude - from.longitude);
+  const y = Math.sin(longitudeDelta) * Math.cos(latitude2);
+  const x =
+    Math.cos(latitude1) * Math.sin(latitude2) -
+    Math.sin(latitude1) * Math.cos(latitude2) * Math.cos(longitudeDelta);
+  return normalizeHeading((Math.atan2(y, x) * 180) / Math.PI);
+}
+
+function degreesToRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function normalizeHeading(value: number) {
+  return ((value % 360) + 360) % 360;
 }
 
 function popup(position: Position) {

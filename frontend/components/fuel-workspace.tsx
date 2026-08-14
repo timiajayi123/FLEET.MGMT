@@ -224,7 +224,7 @@ export function FuelWorkspace({
       setSelected(null);
       setMessage(
         decision === 'APPROVE'
-          ? 'Fuel entry moved to the next approval stage.'
+          ? 'Fuel entry approved successfully.'
           : 'Fuel entry rejected and recorded in the audit trail.',
       );
       await load();

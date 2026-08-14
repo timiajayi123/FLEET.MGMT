@@ -5,7 +5,7 @@ import {
   ClipboardList,
   Fuel,
   LayoutDashboard,
-  Map as MapIcon,
+  LocateFixed,
   MapPin,
   Route,
   ShieldCheck,
@@ -75,7 +75,7 @@ export const navigation: NavigationGroup[] = [
       {
         label: 'GPS Tracking',
         href: '/operations/gps-tracking',
-        icon: MapIcon,
+        icon: LocateFixed,
         roles: ['S_ADMIN', 'FM', 'DRIVER'],
       },
       {
@@ -187,17 +187,39 @@ export function canAccessNavigationItem(item: NavigationItem, roleCode?: string)
 }
 
 export function visibleNavigation(roleCode?: string) {
-  return navigation
+  const groups = navigation
     .map((group) => ({
       ...group,
       items: group.items
         .filter((item) => canAccessNavigationItem(item, roleCode))
-        .map((item) =>
-          roleCode === 'DRIVER' && item.href === '/operations/gps-tracking'
-            ? { ...item, label: 'Trip Start' }
-            : item,
-        ),
+        .map((item) => {
+          if (roleCode !== 'DRIVER') return item;
+          if (item.href === '/operations/gps-tracking') return { ...item, label: 'Trip Start' };
+          if (item.href === '/operations/maintenance')
+            return { ...item, label: 'Maintenance Request' };
+          return item;
+        }),
     }))
+    .filter((group) => group.items.length > 0);
+  if (roleCode !== 'DRIVER') return groups;
+
+  const maintenanceHrefs = new Set([
+    '/operations/maintenance',
+    '/operations/maintenance/history',
+  ]);
+  const maintenanceItems = groups.flatMap((group) =>
+    group.items.filter((item) => maintenanceHrefs.has(item.href)),
+  );
+  return groups
+    .flatMap((group) => {
+      const visibleGroup = {
+        ...group,
+        items: group.items.filter((item) => !maintenanceHrefs.has(item.href)),
+      };
+      return group.label === 'Operations'
+        ? [visibleGroup, { label: 'Maintenance', items: maintenanceItems }]
+        : [visibleGroup];
+    })
     .filter((group) => group.items.length > 0);
 }
 

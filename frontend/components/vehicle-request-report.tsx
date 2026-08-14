@@ -9,7 +9,6 @@ import {
   Fuel,
   Gauge,
   Route,
-  Users,
   Wrench,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -19,7 +18,6 @@ import { PageHeader } from './page-header';
 type ReportKind =
   | 'requests'
   | 'trips'
-  | 'drivers'
   | 'driver-performance'
   | 'speed'
   | 'utilisation'
@@ -51,15 +49,8 @@ const reports: {
   {
     kind: 'trips',
     title: 'Trip Report',
-    description: 'Request-backed trips, dates, distance, vehicle and driver.',
+    description: 'Completed journeys, dates, distance, vehicle, staff and driver.',
     icon: Route,
-    available: true,
-  },
-  {
-    kind: 'drivers',
-    title: 'Driver Activity Report',
-    description: 'Driver trip participation and completed-trip counts.',
-    icon: Users,
     available: true,
   },
   {
@@ -320,7 +311,7 @@ function endpointFor(kind: ReportKind, status: string, search: string, from: str
   if (kind === 'requests') return `/api/analytics/reports/vehicle-requests?${params}`;
   if (kind === 'maintenance') return `/api/analytics/reports/maintenance?${params}`;
   if (kind === 'driver-performance') return `/api/analytics/reports/driver-performance?${params}`;
-  if (kind === 'trips' || kind === 'drivers') return `/api/trips?${params}`;
+  if (kind === 'trips') return `/api/analytics/reports/trips?${params}`;
   if (kind === 'speed') return '/api/analytics/speed?threshold=100';
   return '/api/analytics/dashboard';
 }
@@ -330,20 +321,6 @@ function normalise(kind: ReportKind, payload: Record<string, unknown>): Row[] {
   if (kind === 'requests' || kind === 'trips' || kind === 'maintenance' || kind === 'driver-performance')
     return (payload.data as Row[] | undefined) ?? [];
   if (kind === 'speed') return (payload.violations as Row[] | undefined) ?? [];
-  if (kind === 'drivers') {
-    const trips =
-      (payload.data as { driver?: { staffName?: string } | null; status: string }[] | undefined) ??
-      [];
-    const map = new Map<string, { driver: string; allocatedTrips: number; completedTrips: number }>();
-    trips.forEach((trip) => {
-      const driver = trip.driver?.staffName ?? 'Unassigned driver';
-      const row = map.get(driver) ?? { driver, allocatedTrips: 0, completedTrips: 0 };
-      row.allocatedTrips++;
-      if (trip.status === 'COMPLETED') row.completedTrips++;
-      map.set(driver, row);
-    });
-    return [...map.values()];
-  }
   return (payload.mostUsedVehicles as Row[] | undefined) ?? [];
 }
 function peopleFromRows(rows: Row[], key: 'reportedBy' | 'reviewedBy') {

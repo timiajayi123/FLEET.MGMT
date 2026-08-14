@@ -10,6 +10,7 @@ export class AnalyticsController {
   @Get('dashboard') async dashboard(@Req() req: Request, @Query() query: Record<string, string>) { await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]); return this.analytics.dashboard(filters(query)); }
   @Get('speed') async speed(@Req() req: Request, @Query() query: Record<string, string>) { await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]); const threshold = Number(query.threshold); return this.analytics.speed(filters(query), Number.isFinite(threshold) && threshold >= 20 && threshold <= 200 ? threshold : 100); }
   @Get('reports/vehicle-requests') async report(@Req() req: Request, @Query() query: Record<string, string>) { await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]); return this.analytics.report(filters(query)); }
+  @Get('reports/trips') async tripReport(@Req() req: Request, @Query() query: Record<string, string>) { await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]); return this.analytics.tripReport(filters(query)); }
   @Get('reports/maintenance') async maintenanceReport(@Req() req: Request, @Query() query: Record<string, string>) { await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]); return this.analytics.maintenanceReport(filters(query)); }
   @Get('reports/driver-performance') async driverPerformance(@Req() req: Request, @Query() query: Record<string, string>) { await requireUser(this.auth, req, [...FLEET_MANAGER_ROLES]); return this.analytics.driverPerformance(filters(query)); }
 }

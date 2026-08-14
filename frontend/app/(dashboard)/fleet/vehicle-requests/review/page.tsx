@@ -30,6 +30,7 @@ type VehicleRequest = {
   numberOfPassengers: number;
   priority: string;
   remarks?: string | null;
+  attachmentFileName?: string | null;
   status: string;
   createdAt: string;
 };
@@ -79,7 +80,12 @@ export default function ReviewRequestsPage() {
   const filteredRequests = useMemo(() => {
     const search = query.trim().toLowerCase();
     return requests.filter((request) => {
-      if (statusFilter && request.status !== statusFilter) return false;
+      const matchesStatus =
+        !statusFilter ||
+        (statusFilter === 'APPROVED_ALLOCATED'
+          ? ['APPROVED', 'ALLOCATED'].includes(request.status)
+          : request.status === statusFilter);
+      if (!matchesStatus) return false;
       if (!search) return true;
       return [
         request.requestNumber,
@@ -114,28 +120,12 @@ export default function ReviewRequestsPage() {
     await load();
   }
 
-  async function approveRequest(id: string) {
-    const response = await fetch(`/api/vehicle-requests/${id}/approve`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-    const payload = await readApiJson(response, 'Unable to approve request.');
-    if (!response.ok) {
-      setError(apiMessage(payload.message, 'Unable to approve request.'));
-      return;
-    }
-    setError('');
-    setSelectedRequest(null);
-    await load();
-  }
-
   async function approveWithAllocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!approvalRequest) return;
     const body = Object.fromEntries(new FormData(event.currentTarget));
-    body.startAt = new Date(String(body.startAt)).toISOString();
-    body.expectedEndAt = new Date(String(body.expectedEndAt)).toISOString();
+    body.startAt = new Date(approvalRequest.departureDate).toISOString();
+    body.expectedEndAt = new Date(approvalRequest.expectedReturnDate).toISOString();
     if (!body.allocationId) delete body.allocationId;
     const response = await fetch(`/api/vehicle-requests/${approvalRequest.id}/approve`, {
       method: 'PATCH',
@@ -173,8 +163,7 @@ export default function ReviewRequestsPage() {
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             <option value="">All statuses</option>
             <option value="PENDING_APPROVAL">Pending approval</option>
-            <option value="APPROVED">Approved</option>
-            <option value="ALLOCATED">Allocated</option>
+            <option value="APPROVED_ALLOCATED">Approved and allocated</option>
             <option value="REJECTED">Rejected</option>
             <option value="COMPLETED">Completed</option>
           </select>
@@ -239,7 +228,6 @@ export default function ReviewRequestsPage() {
           request={selectedRequest}
           onClose={() => setSelectedRequest(null)}
           onReject={() => void rejectRequest(selectedRequest.id)}
-          onApprove={() => void approveRequest(selectedRequest.id)}
           onApproveAndAllocate={() => {
             setModalError('');
             setApprovalRequest(selectedRequest);
@@ -274,19 +262,18 @@ function RequestDetailsModal({
   request,
   onClose,
   onReject,
-  onApprove,
   onApproveAndAllocate,
 }: {
   request: VehicleRequest;
   onClose: () => void;
   onReject: () => void;
-  onApprove: () => void;
   onApproveAndAllocate: () => void;
 }) {
-  const actionable = ['PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(request.status);
+  const canReject = request.status === 'PENDING_APPROVAL';
+  const canAllocate = ['PENDING_APPROVAL', 'APPROVED'].includes(request.status);
   return (
     <div className="master-modal-backdrop">
-      <section className="master-modal">
+      <section className="master-modal request-review-modal">
         <header>
           <div>
             <span>Request details</span>
@@ -294,62 +281,111 @@ function RequestDetailsModal({
           </div>
           <button onClick={onClose}>x</button>
         </header>
-        <dl className="details-grid request-details-grid">
-          <RequestDetail label="Request ID" value={request.requestNumber} />
-          <RequestDetail label="Staff name" value={request.staffName} />
-          <RequestDetail label="Employee ID" value={request.employeeId} />
-          <RequestDetail label="Status" value={request.status.replaceAll('_', ' ')} />
-          <RequestDetail label="Directorate" value={request.directorate} />
-          <RequestDetail label="Department" value={request.department} />
-          <RequestDetail label="Unit" value={request.unit || 'Not provided'} />
-          <RequestDetail label="Office / location" value={request.location} />
-          <RequestDetail label="Purpose" value={request.purposeOfTrip} />
-          <RequestDetail label="Vehicle type" value={request.vehicleTypeName} />
-          <RequestDetail label="Destination" value={request.destination} />
-          <RequestDetail
-            label="Passengers"
-            value={
-              request.numberOfPassengers ? String(request.numberOfPassengers) : 'Not specified'
-            }
-          />
-          <RequestDetail
-            label="Departure"
-            value={new Date(request.departureDate).toLocaleString()}
-          />
-          <RequestDetail
-            label="Expected return"
-            value={new Date(request.expectedReturnDate).toLocaleString()}
-          />
-          <RequestDetail label="Priority" value={request.priority} />
-          <RequestDetail
-            label="Purpose details"
-            value={request.remarks || 'No purpose details provided'}
-            full
-          />
-        </dl>
+        <div className="request-review-sections">
+          <RequestReviewSection
+            number="01"
+            title="Staff details"
+            description="Information about the staff member who submitted the request."
+          >
+            <RequestDetail label="Staff name" value={request.staffName} />
+            <RequestDetail label="Employee ID" value={request.employeeId} />
+            <RequestDetail label="Directorate" value={request.directorate} />
+            <RequestDetail label="Department" value={request.department} />
+            <RequestDetail label="Unit" value={request.unit || 'Not provided'} />
+          </RequestReviewSection>
+
+          <RequestReviewSection
+            number="02"
+            title="Trip details"
+            description="Journey requirements submitted for approval and allocation."
+          >
+            <RequestDetail label="Destination from" value={request.location} />
+            <RequestDetail label="Destination to" value={request.destination} />
+            <RequestDetail label="Purpose of trip" value={request.purposeOfTrip} />
+            <RequestDetail label="Vehicle type" value={request.vehicleTypeName} />
+            <RequestDetail
+              label="Departure"
+              value={new Date(request.departureDate).toLocaleString()}
+            />
+            <RequestDetail
+              label="Expected return"
+              value={new Date(request.expectedReturnDate).toLocaleString()}
+            />
+            <RequestDetail
+              label="Number of passengers"
+              value={
+                request.numberOfPassengers ? String(request.numberOfPassengers) : 'Not specified'
+              }
+            />
+            <RequestDetail label="Priority" value={request.priority} />
+            <RequestDetail
+              label="Purpose details"
+              value={request.remarks || 'No purpose details provided'}
+              full
+            />
+          </RequestReviewSection>
+
+          <RequestReviewSection
+            number="03"
+            title="Supporting information"
+            description="Request reference and current approval status."
+          >
+            <RequestDetail label="Request ID" value={request.requestNumber} />
+            <RequestDetail label="Status" value={request.status.replaceAll('_', ' ')} />
+            <RequestDetail label="Submitted" value={new Date(request.createdAt).toLocaleString()} />
+            <RequestDetail
+              label="Supporting document"
+              value={request.attachmentFileName || 'No document attached'}
+            />
+          </RequestReviewSection>
+        </div>
         <footer className="request-details-actions">
           <button type="button" className="secondary-action" onClick={onClose}>
             Close
           </button>
-          {actionable && (
+          {(canReject || canAllocate) && (
             <div>
-              <button type="button" className="request-reject-action" onClick={onReject}>
-                <XCircle size={16} />
-                <span>Reject request</span>
-              </button>
-              {request.status !== 'APPROVED' && (
-                <button type="button" className="secondary-action" onClick={onApprove}>
-                  Approve
+              {canReject && (
+                <button type="button" className="request-reject-action" onClick={onReject}>
+                  <XCircle size={16} />
+                  <span>Reject request</span>
                 </button>
               )}
-              <button type="button" className="primary-action" onClick={onApproveAndAllocate}>
-                Approve &amp; allocate
-              </button>
+              {canAllocate && (
+                <button type="button" className="primary-action" onClick={onApproveAndAllocate}>
+                  Approve and allocate
+                </button>
+              )}
             </div>
           )}
         </footer>
       </section>
     </div>
+  );
+}
+
+function RequestReviewSection({
+  number,
+  title,
+  description,
+  children,
+}: {
+  number: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="request-review-section">
+      <div className="request-review-section-heading">
+        <span>{number}</span>
+        <div>
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
+      </div>
+      <dl className="details-grid request-details-grid">{children}</dl>
+    </section>
   );
 }
 
@@ -386,7 +422,7 @@ function ApprovalAllocationModal({
 
   return (
     <div className="master-modal-backdrop">
-      <section className="master-modal">
+      <section className="master-modal approval-allocation-modal">
         <header>
           <div>
             <span>Approve and allocate</span>
@@ -413,59 +449,101 @@ function ApprovalAllocationModal({
               allocation.
             </div>
           )}
-          <div className="master-form-grid">
-            <Select
-              name="allocationId"
-              label="Use existing vehicle-driver allocation"
-              placeholder="Create a new allocation in this approval"
-              required={false}
-              value={allocationId}
-              onChange={(value) => {
-                onClearError();
-                setAllocationId(value);
-              }}
-              options={allocations.map((allocation) => ({
-                id: allocation.id,
-                label: `${allocation.vehicle.registrationNumber} - ${allocation.driver.staffName} - ${new Date(allocation.startAt).toLocaleString()} - ${allocation.id.slice(0, 8)}`,
-              }))}
-            />
-            <Select
-              key={`vehicle-${selectedAllocation?.id ?? 'new'}`}
-              name="vehicleId"
-              label="Vehicle"
-              placeholder="Select available vehicle"
-              value={selectedAllocation?.vehicle.id}
-              options={vehicleOptions.map((vehicle) => ({
-                id: vehicle.id,
-                label: `${vehicle.registrationNumber} - ${vehicle.manufacturer} ${vehicle.model}`,
-              }))}
-            />
-            <Select
-              key={`driver-${selectedAllocation?.id ?? 'new'}`}
-              name="driverId"
-              label="Driver"
-              placeholder="Select available driver"
-              value={selectedAllocation?.driver.id}
-              options={driverOptions.map((driver) => ({
-                id: driver.id,
-                label: `${driver.staffName} (${driver.employeeId})`,
-              }))}
-            />
-            <Field
-              name="startAt"
-              label="Start date and time"
-              type="datetime-local"
-              value={toDatetimeLocal(selectedAllocation?.startAt || request.departureDate)}
-            />
-            <Field
-              name="expectedEndAt"
-              label="Expected return"
-              type="datetime-local"
-              value={toDatetimeLocal(
-                selectedAllocation?.expectedEndAt || request.expectedReturnDate,
-              )}
-            />
-            <Field name="notes" label="Notes" required={false} value={selectedAllocation?.notes} />
+          <div className="approval-allocation-sections">
+            <section className="approval-allocation-section">
+              <header>
+                <span>01</span>
+                <div>
+                  <h3>Permanent allocation</h3>
+                  <p>Select an existing permanent vehicle-driver allocation when available.</p>
+                </div>
+              </header>
+              <div className="approval-single-row">
+                <Select
+                  name="allocationId"
+                  label="Existing permanent allocation (Optional)"
+                  placeholder="No permanent allocation — create a flexible allocation"
+                  required={false}
+                  value={allocationId}
+                  onChange={(value) => {
+                    onClearError();
+                    setAllocationId(value);
+                  }}
+                  options={allocations.map((allocation) => ({
+                    id: allocation.id,
+                    label: `${allocation.vehicle.registrationNumber} - ${allocation.driver.staffName} - ${new Date(allocation.startAt).toLocaleString()} - ${allocation.id.slice(0, 8)}`,
+                  }))}
+                />
+              </div>
+            </section>
+
+            <section className="approval-allocation-section">
+              <header>
+                <span>02</span>
+                <div>
+                  <h3>Flexible allocation</h3>
+                  <p>Select the vehicle and driver for this request.</p>
+                </div>
+              </header>
+              <div className="approval-pair-row">
+                <Select
+                  key={`vehicle-${selectedAllocation?.id ?? 'new'}`}
+                  name="vehicleId"
+                  label="Vehicle"
+                  placeholder="Select available vehicle"
+                  value={selectedAllocation?.vehicle.id}
+                  options={vehicleOptions.map((vehicle) => ({
+                    id: vehicle.id,
+                    label: `${vehicle.registrationNumber} - ${vehicle.manufacturer} ${vehicle.model}`,
+                  }))}
+                />
+                <Select
+                  key={`driver-${selectedAllocation?.id ?? 'new'}`}
+                  name="driverId"
+                  label="Driver"
+                  placeholder="Select available driver"
+                  value={selectedAllocation?.driver.id}
+                  options={driverOptions.map((driver) => ({
+                    id: driver.id,
+                    label: `${driver.staffName} (${driver.employeeId})`,
+                  }))}
+                />
+              </div>
+            </section>
+
+            <section className="approval-allocation-section">
+              <header>
+                <span>03</span>
+                <div>
+                  <h3>Trip schedule</h3>
+                  <p>The approved request dates are locked and cannot be changed here.</p>
+                </div>
+              </header>
+              <div className="approval-pair-row">
+                <Field
+                  name="startAt"
+                  label="Start date and time (locked)"
+                  type="datetime-local"
+                  value={toDatetimeLocal(request.departureDate)}
+                  readOnly
+                />
+                <Field
+                  name="expectedEndAt"
+                  label="Expected return (locked)"
+                  type="datetime-local"
+                  value={toDatetimeLocal(request.expectedReturnDate)}
+                  readOnly
+                />
+              </div>
+              <div className="approval-notes-row">
+                <Field
+                  name="notes"
+                  label="Notes (Optional)"
+                  required={false}
+                  value={selectedAllocation?.notes}
+                />
+              </div>
+            </section>
           </div>
           <footer>
             <button type="button" className="secondary-action" onClick={onClose}>
@@ -507,17 +585,25 @@ function Field({
   type = 'text',
   required = true,
   value,
+  readOnly = false,
 }: {
   name: string;
   label: string;
   type?: string;
   required?: boolean;
   value?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="master-field">
       <span>{label}</span>
-      <input name={name} type={type} required={required} defaultValue={value ?? ''} />
+      <input
+        name={name}
+        type={type}
+        required={required}
+        defaultValue={value ?? ''}
+        readOnly={readOnly}
+      />
     </label>
   );
 }

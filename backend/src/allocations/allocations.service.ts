@@ -67,6 +67,8 @@ export class AllocationsService {
       if (!['PENDING_APPROVAL', 'REJECTED', 'APPROVED', 'ALLOCATED'].includes(request.status)) {
         throw new BadRequestException('This request cannot be allocated.');
       }
+      const scheduledStartAt = request.departureDate;
+      const scheduledEndAt = request.expectedReturnDate;
       if (dto.allocationId) {
         const existing = await tx.vehicleAllocation.findUnique({ where: { id: dto.allocationId } });
         if (!existing) throw new NotFoundException('Allocation not found.');
@@ -77,9 +79,6 @@ export class AllocationsService {
           throw new BadRequestException('This allocation is already linked to another vehicle request.');
         }
         if (existing.vehicleId === dto.vehicleId && existing.driverId === dto.driverId) {
-          const startAt = dto.startAt ? new Date(dto.startAt) : existing.startAt;
-          const expectedEndAt = dto.expectedEndAt ? new Date(dto.expectedEndAt) : existing.expectedEndAt;
-          if (expectedEndAt <= startAt) throw new BadRequestException('Expected end must be after scheduled departure.');
           const allocation = await tx.vehicleAllocation.update({
             where: { id: existing.id },
             data: {
@@ -87,8 +86,8 @@ export class AllocationsService {
               assignedById,
               purpose: request.purposeOfTrip,
               destination: request.destination,
-              startAt,
-              expectedEndAt,
+              startAt: scheduledStartAt,
+              expectedEndAt: scheduledEndAt,
               notes: dto.notes || existing.notes,
               status: 'ASSIGNED',
               rejectionReason: null,
@@ -103,7 +102,18 @@ export class AllocationsService {
           return allocation;
         }
       }
-      const allocation = await this.save(tx, dto.allocationId, { ...dto, requestId }, assignedById, true);
+      const allocation = await this.save(
+        tx,
+        dto.allocationId,
+        {
+          ...dto,
+          requestId,
+          startAt: scheduledStartAt.toISOString(),
+          expectedEndAt: scheduledEndAt.toISOString(),
+        },
+        assignedById,
+        true,
+      );
       await tx.vehicleRequest.update({ where: { id: requestId }, data: { status: 'ALLOCATED' } });
       return allocation;
     });
